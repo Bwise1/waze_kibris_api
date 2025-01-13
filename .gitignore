@@ -23,3 +23,6 @@ go.work
 
 # idea files
 .idea
+
+# Air tmp directory
+tmp/

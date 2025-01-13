@@ -9,8 +9,10 @@ import (
 
 	"github.com/bwise1/waze_kibris/config"
 	deps "github.com/bwise1/waze_kibris/internal/debs"
+	smtp "github.com/bwise1/waze_kibris/util/email"
 	"github.com/bwise1/waze_kibris/util/values"
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 const (
@@ -22,7 +24,7 @@ const (
 
 type Handler func(w http.ResponseWriter, r *http.Request) *ServerResponse
 
-func (h Handler) ServeHttp(w http.ResponseWriter, r *http.Request) {
+func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	resp := h(w, r)
 	respByte, err := json.Marshal(resp)
 	if err != nil {
@@ -36,6 +38,8 @@ type API struct {
 	Server *http.Server
 	Config *config.Config
 	Deps   *deps.Dependencies
+	Mailer *smtp.Mailer
+	DB     *pgxpool.Pool
 }
 
 func (api *API) Serve() error {
@@ -58,6 +62,10 @@ func (api *API) setUpServerHandler() http.Handler {
 			w.Write([]byte("Hello, World!"))
 		},
 	)
+
+	mux.Mount("/auth", api.AuthRoutes())
+	mux.Mount("/reports", api.ReportRoutes())
+	mux.Mount("/saved-locations", api.SavedLocationRoutes())
 
 	return mux
 }

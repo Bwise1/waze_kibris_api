@@ -5,6 +5,7 @@ import (
 
 	"github.com/bwise1/waze_kibris/config"
 	"github.com/bwise1/waze_kibris/internal/db"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Dependencies struct {
@@ -20,4 +21,8 @@ func New(cfg *config.Config) *Dependencies {
 		DB: database,
 	}
 	return &deps
+}
+
+func (d *Dependencies) Pool() *pgxpool.Pool {
+	return d.DB.Pool()
 }

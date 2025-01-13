@@ -2,12 +2,16 @@ package util
 
 import (
 	"bytes"
+	"fmt"
 	"html/template"
+	"math/rand"
 	"net/url"
 	"regexp"
 	"strings"
 	"time"
 	"unicode"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 var (
@@ -77,4 +81,23 @@ var TemplateFuncs = template.FuncMap{
 
 	// Slice functions
 	"join": strings.Join,
+}
+
+func GenerateVerificationCode() string {
+	rand.Seed(time.Now().UnixNano())
+	return fmt.Sprintf("%04d", rand.Intn(10000))
+}
+
+func PointToLatLon(point pgtype.Point) (float64, float64) {
+	return point.P.Y, point.P.X
+}
+
+// PointFromLatLon creates a pgtype.Point from latitude and longitude.
+func PointFromLatLon(lat, lon float64) pgtype.Point {
+	return pgtype.Point{
+		P: pgtype.Vec2{
+			X: lon,
+			Y: lat,
+		},
+	}
 }

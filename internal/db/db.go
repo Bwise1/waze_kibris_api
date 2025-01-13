@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"log"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -15,7 +16,6 @@ type DB struct {
 }
 
 func New(dsn string) (*DB, error) {
-
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
@@ -29,6 +29,7 @@ func New(dsn string) (*DB, error) {
 	config.MinConns = 5
 	config.MaxConnLifetime = 2 * time.Hour
 	config.MaxConnIdleTime = 5 * time.Minute
+	config.ConnConfig.RuntimeParams["prefer_simple_protocol"] = "true"
 
 	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
@@ -38,7 +39,11 @@ func New(dsn string) (*DB, error) {
 	return &DB{pool: pool}, nil
 }
 
-func (db *DB) RunInTx(ctx context.Context, fn func(pgx.Tx) error) error {
+func (db *DB) Pool() *pgxpool.Pool {
+	return db.pool
+}
+
+func (db *DB) RunInTx(ctx context.Context, fn func(pgx.Tx) error) (err error) {
 	// Begin a new transaction
 	tx, err := db.pool.Begin(ctx)
 	if err != nil {
@@ -51,7 +56,9 @@ func (db *DB) RunInTx(ctx context.Context, fn func(pgx.Tx) error) error {
 			_ = tx.Rollback(ctx) // rollback on panic
 			panic(p)             // re-throw panic after rollback
 		} else if err != nil {
-			_ = tx.Rollback(ctx) // rollback on error
+			if rbErr := tx.Rollback(ctx); rbErr != nil {
+				log.Printf("transaction rollback failed: %v", rbErr)
+			}
 		}
 	}()
 

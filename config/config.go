@@ -15,6 +15,11 @@ type Config struct {
 	JwtExpires    string `env:"JWT_EXPIRES"`
 	RefreshSecret string `env:"REFRESH_SECRET"`
 	RefreshExpiry string `env:"REFRESH_EXPIRY"`
+	SMTPHost      string `env:"SMTP_HOST"`
+	SMTPPort      int    `env:"SMTP_PORT"`
+	SMTPUser      string `env:"SMTP_USER"`
+	SMTPPassword  string `env:"SMTP_PASSWORD"`
+	SMTPFrom      string `env:"SMTP_FROM"`
 }
 
 func New() *Config {

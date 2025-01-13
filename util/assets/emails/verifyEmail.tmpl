@@ -1,0 +1,32 @@
+{{define "subject"}}Reset Your Password{{end}}
+
+{{define "plainBody"}}
+Hello {{.Name}},
+
+You have requested to reset your password. To reset your password, please click the following link:
+{{.ResetURL}}
+
+If you didn't request a password reset, you can ignore this email.
+
+This link will expire in 1 hour.
+
+Thank you!
+{{end}}
+
+{{define "htmlBody"}}
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width">
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  </head>
+  <body>
+    <p>Hello {{.Name}},</p>
+    <p>You have requested to reset your password. To reset your password, please click the following link:</p>
+    <p><a href="{{.ResetURL}}">Reset My Password</a></p>
+    <p>If you didn't request a password reset, you can ignore this email.</p>
+    <p>This link will expire in 10 Minutes.</p>
+    <p>Thank you!</p>
+  </body>
+</html>
+{{end}}

@@ -1,6 +1,7 @@
 package util
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/bwise1/waze_kibris/util/tracing"
 	"github.com/bwise1/waze_kibris/util/values"
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 )
 
@@ -80,4 +82,28 @@ func RandomString(length int, pool string) string {
 	}
 
 	return string(bytes)
+}
+
+func GenerateUUID() uuid.UUID {
+	return uuid.New()
+}
+
+// GetUserIDFromContext extracts the user ID from the context.
+func GetUserIDFromContext(ctx context.Context) (uuid.UUID, error) {
+	userIDStr, ok := ctx.Value("user_id").(string)
+	if !ok || userIDStr == "" {
+		return uuid.Nil, errors.New("user ID not found in context")
+	}
+
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		return uuid.Nil, errors.New("invalid user ID format")
+	}
+
+	return userID, nil
+}
+
+// string to UUID
+func StringToUUID(s string) (uuid.UUID, error) {
+	return uuid.Parse(s)
 }
