@@ -176,3 +176,47 @@ CREATE TABLE saved_locations (
     location GEOMETRY(Point, 4326) NOT NULL,
     created_at TIMESTAMPTZ DEFAULT current_timestamp
 );
+
+
+-- reports
+-- Drop table if it exists
+DROP TABLE IF EXISTS reports;
+
+-- Reports table for traffic incidents and hazards
+CREATE TABLE reports (
+   id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+  user_id uuid REFERENCES users(id) NOT NULL,
+  type text NOT NULL CHECK (type IN ('TRAFFIC', 'POLICE', 'ACCIDENT', 'HAZARD', 'ROAD_CLOSED')),
+  subtype text CHECK (subtype IN ('LIGHT', 'HEAVY', 'STAND_STILL', 'VISIBLE', 'HIDDEN', 'OTHER_SIDE', 'MINOR', 'MAJOR')),
+  position geometry(Point, 4326) NOT NULL,
+  description text,
+  severity integer CHECK (severity BETWEEN 1 AND 5),
+  verified_count integer DEFAULT 0,
+  active boolean DEFAULT true,
+  resolved boolean DEFAULT false,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now(),
+  expires_at timestamptz NOT NULL,
+  image_url text,
+  report_source text CHECK (report_source IN ('USER', 'AUTOMATIC')),
+  report_status text CHECK (report_status IN ('PENDING', 'VERIFIED', 'RESOLVED')),
+  comments_count integer DEFAULT 0,
+  upvotes_count integer DEFAULT 0,
+  downvotes_count integer DEFAULT 0,
+  CONSTRAINT valid_report_position CHECK (ST_IsValid(position))
+);
+
+-- Spatial index for efficient location queries
+CREATE INDEX reports_position_idx ON reports USING GIST (position);
+
+-- Index for filtering active reports
+CREATE INDEX reports_active_idx ON reports(active) WHERE active = true;
+
+-- Index for expired reports cleanup
+CREATE INDEX reports_expires_at_idx ON reports(expires_at);
+
+-- Index for filtering reports by user
+CREATE INDEX reports_user_id_idx ON reports(user_id);
+
+-- Index for filtering resolved reports
+CREATE INDEX reports_resolved_idx ON reports(resolved);

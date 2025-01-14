@@ -66,6 +66,7 @@ func (api *API) setUpServerHandler() http.Handler {
 	mux.Mount("/auth", api.AuthRoutes())
 	mux.Mount("/reports", api.ReportRoutes())
 	mux.Mount("/saved-locations", api.SavedLocationRoutes())
+	mux.Mount("/user", api.UserRoutes())
 
 	return mux
 }

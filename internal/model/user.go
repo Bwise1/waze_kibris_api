@@ -26,11 +26,19 @@ type User struct {
 	LastName          *string   `json:"lastname,omitempty"`
 	Username          *string   `json:"username,omitempty"`
 	Email             string    `json:"email"`
-	PasswordHash      *string   `json:"password_hash,omitempty"`
 	IsDeleted         bool      `json:"is_deleted"`
 	AuthProvider      string    `json:"auth_provider,omitempty"`
 	IsVerified        bool      `json:"is_verified"`
 	PreferredLanguage *string   `json:"preferred_language,omitempty"`
 	CreatedAt         time.Time `json:"created_at"`
 	UpdatedAt         time.Time `json:"updated_at"`
+}
+
+type ChangePasswordRequest struct {
+	OldPassword string `json:"old_password" validate:"required"`
+	NewPassword string `json:"new_password" validate:"required,min=8"`
+}
+
+type UpdateLanguageRequest struct {
+	Language string `json:"language" validate:"required"`
 }

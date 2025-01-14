@@ -9,17 +9,20 @@ import (
 )
 
 type Config struct {
-	Port          int    `env:"PORT" default:"8080"`
-	Dsn           string `env:"DSN" default:"localhost:3306"`
-	JwtSecret     string `env:"JWT_SECRET"`
-	JwtExpires    string `env:"JWT_EXPIRES"`
-	RefreshSecret string `env:"REFRESH_SECRET"`
-	RefreshExpiry string `env:"REFRESH_EXPIRY"`
-	SMTPHost      string `env:"SMTP_HOST"`
-	SMTPPort      int    `env:"SMTP_PORT"`
-	SMTPUser      string `env:"SMTP_USER"`
-	SMTPPassword  string `env:"SMTP_PASSWORD"`
-	SMTPFrom      string `env:"SMTP_FROM"`
+	Port                int    `env:"PORT" default:"8080"`
+	Dsn                 string `env:"DSN" default:"localhost:3306"`
+	JwtSecret           string `env:"JWT_SECRET"`
+	JwtExpires          string `env:"JWT_EXPIRES"`
+	RefreshSecret       string `env:"REFRESH_SECRET"`
+	RefreshExpiry       string `env:"REFRESH_EXPIRY"`
+	SMTPHost            string `env:"SMTP_HOST"`
+	SMTPPort            int    `env:"SMTP_PORT"`
+	SMTPUser            string `env:"SMTP_USER"`
+	SMTPPassword        string `env:"SMTP_PASSWORD"`
+	SMTPFrom            string `env:"SMTP_FROM"`
+	CloudinaryCloudName string `env:"CLOUDINARY_CLOUD_NAME"`
+	CloudinaryAPIKey    string `env:"CLOUDINARY_API_KEY"`
+	CloudinaryAPISecret string `env:"CLOUDINARY_API_SECRET"`
 }
 
 func New() *Config {

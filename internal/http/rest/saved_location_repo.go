@@ -11,7 +11,7 @@ import (
 
 func (api *API) CreateSavedLocationRepo(ctx context.Context, location model.SavedLocation) error {
 	stmt := `
-        INSERT INTO public.saved_locations (user_id, name, location)
+        INSERT INTO saved_locations (user_id, name, location)
         VALUES ($1, $2, ST_SetSRID(ST_MakePoint($3, $4), 4326))
     `
 	_, err := api.Deps.DB.Pool().Exec(ctx, stmt,
@@ -33,7 +33,7 @@ func (api *API) GetSavedLocationRepo(ctx context.Context, id int64) (model.Saved
                ST_X(location::geometry) as longitude,
                ST_Y(location::geometry) as latitude,
                created_at
-        FROM public.saved_locations
+        FROM saved_locations
         WHERE id = $1
     `
 
@@ -79,13 +79,12 @@ func (api *API) UpdateSavedLocationRepo(ctx context.Context, location model.Save
 	return nil
 }
 
-func (api *API) GetSavedLocationsRepo(ctx context.Context, userID uuid.UUID) ([]model.SavedLocation, error) {
+func (api *API) GetSavedLocationsRepo(ctx context.Context, userID uuid.UUID) ([]model.SavedLocationResponse, error) {
 	stmt := `
-		SELECT id, user_id, name,
+		SELECT id, name,
 			   ST_X(location::geometry) as longitude,
-			   ST_Y(location::geometry) as latitude,
-			   created_at
-		FROM public.saved_locations
+			   ST_Y(location::geometry) as latitude
+		FROM saved_locations
 		WHERE user_id = $1
 	`
 	rows, err := api.Deps.DB.Pool().Query(ctx, stmt, userID)
@@ -94,16 +93,14 @@ func (api *API) GetSavedLocationsRepo(ctx context.Context, userID uuid.UUID) ([]
 	}
 	defer rows.Close()
 
-	var locations []model.SavedLocation
+	var locations []model.SavedLocationResponse
 	for rows.Next() {
-		var location model.SavedLocation
+		var location model.SavedLocationResponse
 		err := rows.Scan(
 			&location.ID,
-			&location.UserID,
 			&location.Name,
-			&location.Location.P.X,
-			&location.Location.P.Y,
-			&location.CreatedAt,
+			&location.Longitude,
+			&location.Latitude,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("scanning saved location: %w", err)
