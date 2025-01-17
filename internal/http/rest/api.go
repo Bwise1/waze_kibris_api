@@ -68,6 +68,9 @@ func (api *API) setUpServerHandler() http.Handler {
 	mux.Mount("/saved-locations", api.SavedLocationRoutes())
 	mux.Mount("/user", api.UserRoutes())
 
+	//websocket
+	mux.HandleFunc("/ws", api.Deps.WebSocket.HandleConnections)
+
 	return mux
 }
 

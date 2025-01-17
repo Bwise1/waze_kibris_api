@@ -34,6 +34,8 @@ func main() {
 		Mailer: mailer,
 		DB:     database.Pool(),
 	}
+
+	go deps.WebSocket.Run()
 	go func() {
 		log.Printf("Server running on port %v ...", cfg.Port)
 		log.Fatal(a.Serve())
@@ -47,11 +49,10 @@ func main() {
 	waitTimer := time.NewTimer(allowConnectionsAfterShutdown)
 	<-waitTimer.C
 
-	// Close the database connections
-	database.Close()
-	log.Println("Database connections closed.")
-
 	log.Println("Shutting down server...")
-	//logger.Log.Sugar().Fatal(a.Deps.DAL.DB.Close())
+
+	database.Close()
+	log.Fatal("Database connections closed.")
+
 	log.Fatal(a.Shutdown())
 }
