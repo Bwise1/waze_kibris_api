@@ -47,6 +47,10 @@ func main() {
 	waitTimer := time.NewTimer(allowConnectionsAfterShutdown)
 	<-waitTimer.C
 
+	// Close the database connections
+	database.Close()
+	log.Println("Database connections closed.")
+
 	log.Println("Shutting down server...")
 	//logger.Log.Sugar().Fatal(a.Deps.DAL.DB.Close())
 	log.Fatal(a.Shutdown())

@@ -10,23 +10,23 @@ type Report struct {
 	ID             int64     `json:"id"`
 	UserID         uuid.UUID `json:"user_id"`
 	Type           string    `json:"type"`              // TRAFFIC, POLICE, ACCIDENT, HAZARD, ROAD_CLOSED
-	Subtype        string    `json:"subtype,omitempty"` // LIGHT, HEAVY, STAND_STILL, VISIBLE, HIDDEN, OTHER_SIDE, MINOR, MAJOR
+	Subtype        *string   `json:"subtype,omitempty"` // LIGHT, HEAVY, STAND_STILL, VISIBLE, HIDDEN, OTHER_SIDE, MINOR, MAJOR
 	Latitude       float64   `json:"latitude"`
 	Longitude      float64   `json:"longitude"`
-	Description    string    `json:"description"`
+	Description    *string   `json:"description,omitempty"`
 	Severity       int       `json:"severity"`
-	VerifiedCount  int       `json:"verified_count"`
+	VerifiedCount  int       `json:"verified_count,omitempty"`
 	Active         bool      `json:"active"`
 	Resolved       bool      `json:"resolved"`
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
 	ExpiresAt      time.Time `json:"expires_at"`
-	ImageURL       string    `json:"image_url"`
-	ReportSource   string    `json:"report_source"`
-	ReportStatus   string    `json:"report_status"`
-	CommentsCount  int       `json:"comments_count"`
-	UpvotesCount   int       `json:"upvotes_count"`
-	DownvotesCount int       `json:"downvotes_count"`
+	ImageURL       *string   `json:"image_url,omitempty"`
+	ReportSource   string    `json:"report_source,omitempty"`
+	ReportStatus   string    `json:"report_status,omitempty"`
+	CommentsCount  int       `json:"comments_count,omitempty"`
+	UpvotesCount   int       `json:"upvotes_count,omitempty"`
+	DownvotesCount int       `json:"downvotes_count,omitempty"`
 }
 
 type CreateReportRequest struct {
@@ -57,4 +57,36 @@ type UpdateReportRequest struct {
 	ImageURL     string    `json:"image_url"`
 	ReportSource string    `json:"report_source" validate:"required"`
 	ReportStatus string    `json:"report_status" validate:"required"`
+}
+
+type CreateReportResponse struct {
+	ID             int64     `json:"id"`
+	UserID         uuid.UUID `json:"user_id"`
+	Type           string    `json:"type"`
+	Subtype        string    `json:"subtype,omitempty"`
+	Latitude       float64   `json:"latitude"`
+	Longitude      float64   `json:"longitude"`
+	Description    string    `json:"description,omitempty"`
+	VerifiedCount  int       `json:"verified_count,omitempty"`
+	Active         bool      `json:"active"`
+	Resolved       bool      `json:"resolved"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+	ExpiresAt      time.Time `json:"expires_at"`
+	ImageURL       string    `json:"image_url,omitempty"`
+	ReportSource   string    `json:"report_source"`
+	ReportStatus   string    `json:"report_status"`
+	CommentsCount  int       `json:"comments_count,omitempty"`
+	UpvotesCount   int       `json:"upvotes_count,omitempty"`
+	DownvotesCount int       `json:"downvotes_count,omitempty"`
+}
+
+type NearbyReportsParams struct {
+	Latitude  float64
+	Longitude float64
+	Radius    float64  // in meters
+	Types     []string // optional filter by report types
+	Status    string   // optional filter by status
+	Page      int
+	PageSize  int
 }

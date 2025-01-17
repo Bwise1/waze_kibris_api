@@ -19,8 +19,8 @@ func (api *API) ReportRoutes() chi.Router {
 		r.Use(api.RequireLogin)
 		r.Method(http.MethodPost, "/", Handler(api.CreateReport))
 		r.Method(http.MethodGet, "/nearby", Handler(api.GetNearbyReports))
-		// r.Method(http.MethodGet, "/all", Handler(api.GetAllReports))
-		r.Method(http.MethodGet, "/{id}", Handler(api.GetReportByID))
+
+		r.Method(http.MethodGet, "/{reportID}", Handler(api.GetReportByID))
 		r.Method(http.MethodPut, "/{id}", Handler(api.UpdateReport))
 		r.Method(http.MethodDelete, "/{id}", Handler(api.DeleteReport))
 	})
@@ -69,9 +69,9 @@ func (api *API) CreateReport(_ http.ResponseWriter, r *http.Request) *ServerResp
 func (api *API) GetReportByID(_ http.ResponseWriter, r *http.Request) *ServerResponse {
 	tc := r.Context().Value(values.ContextTracingKey).(tracing.Context)
 
-	id := chi.URLParam(r, "id")
+	reportID := chi.URLParam(r, "reportID")
 
-	report, status, message, err := api.GetReportByIDHelper(r.Context(), id)
+	report, status, message, err := api.GetReportByIDHelper(r.Context(), reportID)
 	if err != nil {
 		return respondWithError(err, message, status, &tc)
 	}
@@ -102,11 +102,34 @@ func (api *API) GetNearbyReports(_ http.ResponseWriter, r *http.Request) *Server
 		return respondWithError(err, "invalid radius", values.BadRequestBody, &tc)
 	}
 
-	reports, status, message, err := api.GetNearbyReportsHelper(r.Context(), longitude, latitude, radius)
+	types := r.URL.Query()["type"]
+	status := r.URL.Query().Get("status")
+	page, err := strconv.Atoi(r.URL.Query().Get("page"))
+	if err != nil {
+		page = 1
+	}
+	pageSize, err := strconv.Atoi(r.URL.Query().Get("pageSize"))
+	if err != nil {
+		pageSize = 10
+	}
+
+	params := model.NearbyReportsParams{
+		Latitude:  latitude,
+		Longitude: longitude,
+		Radius:    radius,
+		Types:     types,
+		Status:    status,
+		Page:      page,
+		PageSize:  pageSize,
+	}
+
+	reports, status, message, err := api.GetNearbyReportsHelper(r.Context(), params)
 	if err != nil {
 		return respondWithError(err, message, status, &tc)
 	}
-
+	if reports == nil {
+		reports = []model.Report{}
+	}
 	return &ServerResponse{
 		Message:    message,
 		Status:     status,
@@ -162,15 +185,15 @@ func (api *API) UpdateReport(_ http.ResponseWriter, r *http.Request) *ServerResp
 		ID:           req.ID,
 		UserID:       userId,
 		Type:         req.Type,
-		Subtype:      req.Subtype,
+		Subtype:      &req.Subtype,
 		Latitude:     req.Latitude,
 		Longitude:    req.Longitude,
-		Description:  req.Description,
+		Description:  &req.Description,
 		Severity:     req.Severity,
 		Active:       req.Active,
 		Resolved:     req.Resolved,
 		ExpiresAt:    req.ExpiresAt,
-		ImageURL:     req.ImageURL,
+		ImageURL:     &req.ImageURL,
 		ReportSource: req.ReportSource,
 		ReportStatus: req.ReportStatus,
 	}

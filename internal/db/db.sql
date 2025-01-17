@@ -184,7 +184,7 @@ DROP TABLE IF EXISTS reports;
 
 -- Reports table for traffic incidents and hazards
 CREATE TABLE reports (
-   id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+  id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
   user_id uuid REFERENCES users(id) NOT NULL,
   type text NOT NULL CHECK (type IN ('TRAFFIC', 'POLICE', 'ACCIDENT', 'HAZARD', 'ROAD_CLOSED')),
   subtype text CHECK (subtype IN ('LIGHT', 'HEAVY', 'STAND_STILL', 'VISIBLE', 'HIDDEN', 'OTHER_SIDE', 'MINOR', 'MAJOR')),

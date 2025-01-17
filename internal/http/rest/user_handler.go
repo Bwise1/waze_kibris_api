@@ -17,7 +17,6 @@ func (api *API) UserRoutes() chi.Router {
 		r.Use(api.RequireLogin)
 		r.Method(http.MethodGet, "/profile", Handler(api.GetProfile))
 		r.Method(http.MethodPut, "/profile", Handler(api.UpdateProfile))
-		r.Method(http.MethodPut, "/password", Handler(api.ChangePassword))
 		r.Method(http.MethodPut, "/language", Handler(api.UpdateLanguage))
 		r.Method(http.MethodDelete, "/account", Handler(api.DeleteAccount))
 	})

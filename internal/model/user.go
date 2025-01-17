@@ -26,7 +26,7 @@ type User struct {
 	LastName          *string   `json:"lastname,omitempty"`
 	Username          *string   `json:"username,omitempty"`
 	Email             string    `json:"email"`
-	IsDeleted         bool      `json:"is_deleted"`
+	IsDeleted         bool      `json:"is_deleted,omitempty"`
 	AuthProvider      string    `json:"auth_provider,omitempty"`
 	IsVerified        bool      `json:"is_verified"`
 	PreferredLanguage *string   `json:"preferred_language,omitempty"`

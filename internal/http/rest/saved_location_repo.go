@@ -81,7 +81,7 @@ func (api *API) UpdateSavedLocationRepo(ctx context.Context, location model.Save
 
 func (api *API) GetSavedLocationsRepo(ctx context.Context, userID uuid.UUID) ([]model.SavedLocationResponse, error) {
 	stmt := `
-		SELECT id, name,
+		SELECT id, name, COALESCE(address, '') as address,
 			   ST_X(location::geometry) as longitude,
 			   ST_Y(location::geometry) as latitude
 		FROM saved_locations
@@ -99,6 +99,7 @@ func (api *API) GetSavedLocationsRepo(ctx context.Context, userID uuid.UUID) ([]
 		err := rows.Scan(
 			&location.ID,
 			&location.Name,
+			&location.Address,
 			&location.Longitude,
 			&location.Latitude,
 		)

@@ -7,16 +7,16 @@ import (
 	"github.com/bwise1/waze_kibris/util/values"
 )
 
-func (api *API) CreateReportHelper(ctx context.Context, report model.CreateReportRequest) (model.Report, string, string, error) {
+func (api *API) CreateReportHelper(ctx context.Context, report model.CreateReportRequest) (model.CreateReportResponse, string, string, error) {
 	newReport, err := api.CreateReportRepo(ctx, report)
 	if err != nil {
-		return model.Report{}, values.Error, "Failed to create report", err
+		return model.CreateReportResponse{}, values.Error, "Failed to create report", err
 	}
 	return newReport, values.Created, "Report created successfully", nil
 }
 
-func (api *API) GetReportByIDHelper(ctx context.Context, id string) (model.Report, string, string, error) {
-	report, err := api.GetReportByIDRepo(ctx, id)
+func (api *API) GetReportByIDHelper(ctx context.Context, reportID string) (model.Report, string, string, error) {
+	report, err := api.GetReportByIDRepo(ctx, reportID)
 	if err != nil {
 		if err == ErrReportNotFound {
 			return model.Report{}, values.NotFound, "Report not found", err
@@ -26,8 +26,8 @@ func (api *API) GetReportByIDHelper(ctx context.Context, id string) (model.Repor
 	return report, values.Success, "Report fetched successfully", nil
 }
 
-func (api *API) GetNearbyReportsHelper(ctx context.Context, longitude, latitude, radius float64) ([]model.Report, string, string, error) {
-	reports, err := api.GetNearbyReportsRepo(ctx, longitude, latitude, radius)
+func (api *API) GetNearbyReportsHelper(ctx context.Context, params model.NearbyReportsParams) ([]model.Report, string, string, error) {
+	reports, err := api.GetNearbyReportsRepo(ctx, params)
 	if err != nil {
 		return nil, values.Error, "Failed to fetch nearby reports", err
 	}

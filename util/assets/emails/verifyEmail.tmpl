@@ -1,14 +1,15 @@
-{{define "subject"}}Reset Your Password{{end}}
+{{define "subject"}}Your Verification Code{{end}}
 
 {{define "plainBody"}}
-Hello {{.Name}},
+Hello,
 
-You have requested to reset your password. To reset your password, please click the following link:
-{{.ResetURL}}
+Your verification code is: {{.Code}}
 
-If you didn't request a password reset, you can ignore this email.
+Please use this code to complete your verification process.
 
-This link will expire in 1 hour.
+If you didn't request this, you can ignore this email.
+
+This code will expire in 1 hour.
 
 Thank you!
 {{end}}
@@ -19,14 +20,37 @@ Thank you!
   <head>
     <meta name="viewport" content="width=device-width">
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        line-height: 1.6;
+      }
+      .container {
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 20px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        background-color: #f9f9f9;
+      }
+      .code {
+        font-size: 24px;
+        font-weight: bold;
+        color: #333;
+        margin: 20px 0;
+      }
+    </style>
   </head>
   <body>
-    <p>Hello {{.Name}},</p>
-    <p>You have requested to reset your password. To reset your password, please click the following link:</p>
-    <p><a href="{{.ResetURL}}">Reset My Password</a></p>
-    <p>If you didn't request a password reset, you can ignore this email.</p>
-    <p>This link will expire in 10 Minutes.</p>
-    <p>Thank you!</p>
+    <div class="container">
+      <p>Hello,</p>
+      <p>Your verification code is:</p>
+      <p class="code">{{.Code}}</p>
+      <p>Please use this code to complete your verification process.</p>
+      <p>If you didn't request this, you can ignore this email.</p>
+      <p>This code will expire in 1 hour.</p>
+      <p>Thank you!</p>
+    </div>
   </body>
 </html>
 {{end}}

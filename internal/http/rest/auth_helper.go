@@ -70,7 +70,7 @@ func (api *API) createRefreshToken(id string) (string, time.Time, error) {
 	return tokenString, expiresAt, nil
 }
 
-func (api *API) CreateNewUser(req model.RegisterRequest) (model.User, string, string, error) {
+func (api *API) CreateNewUser(req model.RegisterRequest) (model.VerifyCodeResponse, string, string, error) {
 	var err error
 	var ctx = context.TODO()
 
@@ -78,16 +78,16 @@ func (api *API) CreateNewUser(req model.RegisterRequest) (model.User, string, st
 
 	err = util.ValidEmail(req.Email)
 	if err != nil {
-		return model.User{}, values.NotAllowed, "Invalid email address provided", err
+		return model.VerifyCodeResponse{}, values.NotAllowed, "Invalid email address provided", err
 	}
 
 	exists, err := api.EmailExists(ctx, req.Email)
 	if err != nil {
-		return model.User{}, values.Error, "Error checking email", err
+		return model.VerifyCodeResponse{}, values.Error, "Error checking email", err
 	}
 
 	if exists {
-		return model.User{}, values.Conflict, "Email already exists", nil
+		return model.VerifyCodeResponse{}, values.Conflict, "Email already exists", nil
 	}
 
 	user := model.User{
@@ -98,7 +98,7 @@ func (api *API) CreateNewUser(req model.RegisterRequest) (model.User, string, st
 
 	err = api.CreateNewUserRepo(ctx, user)
 	if err != nil {
-		return model.User{}, values.Error, "Error creating new user", err
+		return model.VerifyCodeResponse{}, values.Error, "Error creating new user", err
 	}
 
 	// Generate verification code
@@ -108,14 +108,13 @@ func (api *API) CreateNewUser(req model.RegisterRequest) (model.User, string, st
 	tokenType := "register"
 	err = api.StoreVerificationCode(ctx, user.ID.String(), user.Email, code, tokenType, expiresAt)
 	if err != nil {
-		return model.User{}, values.Error, "Failed to store verification code", err
+		return model.VerifyCodeResponse{}, values.Error, "Failed to store verification code", err
 	}
 
 	log.Println("Verification code:", code)
 	go func() {
 		// Send verification email
 		emailData := map[string]interface{}{
-			"Name": user.FirstName,
 			"Code": code,
 		}
 
@@ -125,10 +124,15 @@ func (api *API) CreateNewUser(req model.RegisterRequest) (model.User, string, st
 		}
 	}()
 
-	return user, values.Created, "User created successfully", nil
+	LoginResponse := model.VerifyCodeResponse{
+		ID:    user.ID.String(),
+		Email: user.Email,
+	}
+
+	return LoginResponse, values.Created, "User created successfully", nil
 }
 
-func (api *API) LoginUser(req model.LoginRequest) (model.User, string, string, error) {
+func (api *API) LoginUser(req model.LoginRequest) (model.VerifyCodeResponse, string, string, error) {
 	var err error
 	var ctx = context.TODO()
 
@@ -136,12 +140,12 @@ func (api *API) LoginUser(req model.LoginRequest) (model.User, string, string, e
 
 	err = util.ValidEmail(req.Email)
 	if err != nil {
-		return model.User{}, values.NotAllowed, "Invalid email address provided", err
+		return model.VerifyCodeResponse{}, values.NotAllowed, "Invalid email address provided", err
 	}
 
 	user, err := api.GetUserByEmail(ctx, req.Email)
 	if err != nil {
-		return model.User{}, values.NotFound, "User not found", err
+		return model.VerifyCodeResponse{}, values.NotFound, "User not found", err
 	}
 
 	// Generate verification code
@@ -152,12 +156,11 @@ func (api *API) LoginUser(req model.LoginRequest) (model.User, string, string, e
 	tokenType := "login"
 	err = api.StoreVerificationCode(ctx, user.ID.String(), user.Email, code, tokenType, expiresAt)
 	if err != nil {
-		return model.User{}, values.Error, "Failed to store verification code", err
+		return model.VerifyCodeResponse{}, values.Error, "Failed to store verification code", err
 	}
 	go func() {
 		// Send verification email
 		emailData := map[string]interface{}{
-			"Name": user.FirstName,
 			"Code": code,
 		}
 		err = api.Mailer.Send(user.Email, emailData, "verifyEmail.tmpl")
@@ -166,7 +169,12 @@ func (api *API) LoginUser(req model.LoginRequest) (model.User, string, string, e
 		}
 	}()
 
-	return user, values.Success, "Verification code sent", nil
+	LoginResponse := model.VerifyCodeResponse{
+		ID:    user.ID.String(),
+		Email: user.Email,
+	}
+
+	return LoginResponse, values.Success, "Verification code sent", nil
 }
 
 func (api *API) VerifyCodeHelper(req model.VerifyCodeRequest) (model.LoginResponse, string, string, error) {
@@ -215,7 +223,15 @@ func (api *API) VerifyCodeHelper(req model.VerifyCodeRequest) (model.LoginRespon
 	}
 
 	loggedInUser := model.LoginResponse{
-		User:  &user,
+		User: &model.LoginUserResponse{
+			ID:                user.ID,
+			FirstName:         user.FirstName,
+			LastName:          user.LastName,
+			Username:          user.Username,
+			Email:             user.Email,
+			IsVerified:        user.IsVerified,
+			PreferredLanguage: user.PreferredLanguage,
+		},
 		Token: token,
 	}
 	return loggedInUser, values.Success, "Verification successful", nil
