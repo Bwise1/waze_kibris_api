@@ -98,8 +98,8 @@ func (api *API) GetNearbyReports(_ http.ResponseWriter, r *http.Request) *Server
 	}
 
 	radius, err := strconv.ParseFloat(r.URL.Query().Get("radius"), 64)
-	if err != nil {
-		return respondWithError(err, "invalid radius", values.BadRequestBody, &tc)
+	if err != nil || radius <= 0 {
+		radius = 100 // Default radius in meters
 	}
 
 	types := r.URL.Query()["type"]
