@@ -23,6 +23,9 @@ type Config struct {
 	CloudinaryCloudName string `env:"CLOUDINARY_CLOUD_NAME"`
 	CloudinaryAPIKey    string `env:"CLOUDINARY_API_KEY"`
 	CloudinaryAPISecret string `env:"CLOUDINARY_API_SECRET"`
+	GoogleClientID      string `env:"GOOGLE_CLIENT_ID"`
+	GoogleClientSecret  string `env:"GOOGLE_CLIENT_SECRET"`
+	GoogleRedirectURL   string `env:"GOOGLE_REDIRECT_URL"`
 }
 
 func New() *Config {
