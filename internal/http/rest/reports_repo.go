@@ -265,26 +265,6 @@ func (api *API) DeleteReportRepo(ctx context.Context, id string, userID string) 
 	return nil
 }
 
-// UpdateVotes updates the vote counts for a report
-func (api *API) UpdateReportVotesRepo(ctx context.Context, id string, upvotes, downvotes int) error {
-	query := `
-        UPDATE reports
-        SET
-            upvotes_count = upvotes_count + $1,
-            downvotes_count = downvotes_count + $2,
-            updated_at = NOW()
-        WHERE id = $3
-    `
-	result, err := api.DB.Exec(ctx, query, upvotes, downvotes, id)
-	if err != nil {
-		return err
-	}
-	if result.RowsAffected() == 0 {
-		return ErrUpdateFailed
-	}
-	return nil
-}
-
 // IncrementVerifiedCount increments the verified count for a report
 func (api *API) IncrementVerifiedCountRepo(ctx context.Context, id string) error {
 	query := `
@@ -339,4 +319,100 @@ func (api *API) GetUserReportsRepo(ctx context.Context, userID string) ([]model.
 		reports = append(reports, report)
 	}
 	return reports, rows.Err()
+}
+
+/*
+Votes related repo codes
+*/
+
+// AddVote adds a vote to a report
+func (api *API) AddVoteRepo(ctx context.Context, vote model.Vote) error {
+	query := `
+        INSERT INTO votes (report_id, user_id, vote_type, created_at)
+        VALUES ($1, $2, $3, NOW())
+    `
+	_, err := api.DB.Exec(ctx, query, vote.ReportID, vote.UserID, vote.VoteType)
+	return err
+}
+
+// UpdateVotes updates the vote counts for a report
+func (api *API) UpdateReportVotesRepo(ctx context.Context, id string, upvotes, downvotes int) error {
+	query := `
+        UPDATE reports
+        SET
+            upvotes_count = upvotes_count + $1,
+            downvotes_count = downvotes_count + $2,
+            updated_at = NOW()
+        WHERE id = $3
+    `
+	result, err := api.DB.Exec(ctx, query, upvotes, downvotes, id)
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() == 0 {
+		return ErrUpdateFailed
+	}
+	return nil
+}
+
+// AddComment adds a comment to a report
+func (api *API) AddCommentRepo(ctx context.Context, comment model.Comment) error {
+	query := `
+        INSERT INTO comments (report_id, user_id, content, created_at)
+        VALUES ($1, $2, $3, NOW())
+    `
+	_, err := api.DB.Exec(ctx, query, comment.ReportID, comment.UserID, comment.Comment)
+	return err
+}
+
+// GetComments retrieves comments for a report
+func (api *API) GetCommentsRepo(ctx context.Context, reportID string) ([]model.Comment, error) {
+	query := `
+        SELECT id, report_id, user_id, content, created_at
+        FROM comments
+        WHERE report_id = $1
+        ORDER BY created_at ASC
+    `
+	rows, err := api.DB.Query(ctx, query, reportID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var comments []model.Comment
+	for rows.Next() {
+		var comment model.Comment
+		err := rows.Scan(&comment.ID, &comment.ReportID, &comment.UserID, &comment.Comment, &comment.CreatedAt)
+		if err != nil {
+			return nil, err
+		}
+		comments = append(comments, comment)
+	}
+	return comments, rows.Err()
+}
+
+// GetVotes retrieves all votes for a specific report
+func (api *API) GetVotesRepo(ctx context.Context, reportID string) ([]model.Vote, error) {
+	query := `
+        SELECT id, report_id, user_id, vote_type, created_at
+        FROM votes
+        WHERE report_id = $1
+        ORDER BY created_at ASC
+    `
+	rows, err := api.DB.Query(ctx, query, reportID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var votes []model.Vote
+	for rows.Next() {
+		var vote model.Vote
+		err := rows.Scan(&vote.ID, &vote.ReportID, &vote.UserID, &vote.VoteType, &vote.CreatedAt)
+		if err != nil {
+			return nil, err
+		}
+		votes = append(votes, vote)
+	}
+	return votes, rows.Err()
 }

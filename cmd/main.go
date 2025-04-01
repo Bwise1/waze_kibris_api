@@ -34,7 +34,7 @@ func main() {
 		Mailer: mailer,
 		DB:     database.Pool(),
 	}
-
+	a.Init()
 	go deps.WebSocket.Run()
 	go func() {
 		log.Printf("Server running on port %v ...", cfg.Port)

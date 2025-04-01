@@ -26,3 +26,6 @@ go.work
 
 # Air tmp directory
 tmp/
+
+# google auth local test
+google.html

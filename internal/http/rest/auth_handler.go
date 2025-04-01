@@ -3,6 +3,7 @@ package rest
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"github.com/bwise1/waze_kibris/internal/model"
@@ -23,11 +24,12 @@ import (
 
 var googleOauthConfig *oauth2.Config
 
-func init() {
+func (api *API) Init() {
+	log.Println("Initializing google auth")
 	googleOauthConfig = &oauth2.Config{
 		RedirectURL:  "http://localhost:8080/auth/google/callback",
-		ClientID:     "YOUR_GOOGLE_CLIENT_ID",
-		ClientSecret: "YOUR_GOOGLE_CLIENT_SECRET",
+		ClientID:     api.Config.GoogleClientID,
+		ClientSecret: api.Config.GoogleClientSecret,
 		Scopes:       []string{"https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile"},
 		Endpoint:     google.Endpoint,
 	}
@@ -41,6 +43,7 @@ func (api *API) AuthRoutes() chi.Router {
 	mux.Method(http.MethodPost, "/verify", Handler(api.VerifyCode))
 	mux.Method(http.MethodPost, "/resend", Handler(api.ResendCode))
 	mux.Method(http.MethodPost, "/google/create", Handler(api.CreateAccountWithGoogle))
+	mux.Method(http.MethodPost, "/refresh", Handler(api.RefreshTokenHandler)) // Add this line
 	mux.Method(http.MethodPost, "/google/login", Handler(api.LoginWithGoogle))
 	return mux
 }
@@ -63,21 +66,17 @@ func (api *API) CreateAccountWithGoogle(_ http.ResponseWriter, r *http.Request) 
 	}
 	defer resp.Body.Close()
 
-	var userInfo struct {
-		ID            string `json:"id"`
-		Email         string `json:"email"`
-		VerifiedEmail bool   `json:"verified_email"`
-		Name          string `json:"name"`
-		GivenName     string `json:"given_name"`
-		FamilyName    string `json:"family_name"`
-		Picture       string `json:"picture"`
-	}
+	var userInfo model.UserInfo
+
+	//log.Println(resp.Body)
 	if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
 		return respondWithError(err, "failed to decode user info", values.Error, &tc)
 	}
 
+	log.Println(userInfo)
 	// Check if user already exists
-	_, err = api.GetUserByEmail(r.Context(), userInfo.Email)
+	Euser, err := api.GetUserByEmail(r.Context(), userInfo.Email)
+	log.Println(Euser)
 	if err == nil {
 		return respondWithError(nil, "user already exists", values.Conflict, &tc)
 	}
@@ -131,15 +130,7 @@ func (api *API) LoginWithGoogle(_ http.ResponseWriter, r *http.Request) *ServerR
 	}
 	defer resp.Body.Close()
 
-	var userInfo struct {
-		ID            string `json:"id"`
-		Email         string `json:"email"`
-		VerifiedEmail bool   `json:"verified_email"`
-		Name          string `json:"name"`
-		GivenName     string `json:"given_name"`
-		FamilyName    string `json:"family_name"`
-		Picture       string `json:"picture"`
-	}
+	var userInfo model.UserInfo
 	if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
 		return respondWithError(err, "failed to decode user info", values.Error, &tc)
 	}
@@ -231,6 +222,33 @@ func (api *API) VerifyCode(_ http.ResponseWriter, r *http.Request) *ServerRespon
 	}
 }
 
+func (api *API) RefreshTokenHandler(_ http.ResponseWriter, r *http.Request) *ServerResponse {
+	var req struct {
+		RefreshToken string `json:"refresh_token"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		return respondWithError(err, "Invalid request body", values.BadRequestBody, nil)
+	}
+
+	// Refresh the access token
+	log.Println("refreshing token")
+	accessToken, newRefreshToken, err := api.RefreshAccessToken(r.Context(), req.RefreshToken)
+	if err != nil {
+		log.Println("error refreshing token", err)
+		return respondWithError(err, "Failed to refresh tokens", values.NotAuthorised, nil)
+	}
+
+	// Return the new tokens
+	return &ServerResponse{
+		Message:    "Tokens refreshed successfully",
+		Status:     values.Success,
+		StatusCode: http.StatusOK,
+		Data: map[string]string{
+			"access_token":  accessToken,
+			"refresh_token": newRefreshToken,
+		},
+	}
+}
 func (api *API) ResendCode(w http.ResponseWriter, r *http.Request) *ServerResponse {
 	tc := r.Context().Value(values.ContextTracingKey).(tracing.Context)
 

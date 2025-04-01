@@ -151,7 +151,7 @@ CREATE INDEX comments_user_id_idx ON comments(user_id);
 -- Votes table for storing votes on reports
 CREATE TABLE votes (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  report_id uuid REFERENCES reports(id) NOT NULL,
+  report_id bigint REFERENCES reports(id) NOT NULL,
   user_id uuid REFERENCES users(id) NOT NULL,
   vote_type text NOT NULL CHECK (vote_type IN ('UPVOTE', 'DOWNVOTE')),
   created_at timestamptz DEFAULT now()

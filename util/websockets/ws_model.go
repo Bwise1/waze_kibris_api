@@ -11,6 +11,8 @@ const (
 	MsgTypeSubscribe     = "subscribe"
 	MsgTypeReportUpdate  = "report_update"
 	MsgTypeDirectMessage = "direct_message"
+	MsgTypeVoteUpdate    = "vote_update"
+	MsgTypeCommentUpdate = "comment_update"
 )
 
 // Client represents a connected WebSocket user

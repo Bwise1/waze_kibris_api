@@ -94,6 +94,7 @@ func (api *API) verifyToken(tokenString string, isRefresh bool) (*TokenClaims, e
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		// Ensure the signing method is correct
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			log.Println("unexpected signing method")
 			return nil, fmt.Errorf("unexpected signing method")
 		}
 		return []byte(secret), nil
@@ -102,6 +103,7 @@ func (api *API) verifyToken(tokenString string, isRefresh bool) (*TokenClaims, e
 	// Specifically handle token expiration
 	if ve, ok := err.(*jwt.ValidationError); ok {
 		if ve.Errors&jwt.ValidationErrorExpired != 0 {
+			log.Println("token expired")
 			return nil, fmt.Errorf("token expired")
 		}
 	}
@@ -115,12 +117,15 @@ func (api *API) verifyToken(tokenString string, isRefresh bool) (*TokenClaims, e
 	// Extract claims
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
+		log.Println("error extracting claims")
 		return nil, fmt.Errorf("invalid claims")
 	}
 
 	// Check the token type (use "typ" instead of "type")
 	tokenType, _ := claims["typ"].(string)
+	log.Println("token type", tokenType, "expected", isRefresh)
 	if (isRefresh && tokenType != "refresh") || (!isRefresh && tokenType != "access") {
+		log.Println("invalid token type")
 		return nil, fmt.Errorf("invalid token type")
 	}
 

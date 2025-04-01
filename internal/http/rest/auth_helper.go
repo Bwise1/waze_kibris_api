@@ -64,9 +64,10 @@ func (api *API) createRefreshToken(id string) (string, time.Time, error) {
 
 	tokenString, err := token.SignedString([]byte(api.Config.RefreshSecret))
 	if err != nil {
+		log.Println("error signing refresh token", err)
 		return "", time.Time{}, err
 	}
-
+	log.Println("refresh token", tokenString)
 	return tokenString, expiresAt, nil
 }
 
@@ -221,6 +222,18 @@ func (api *API) VerifyCodeHelper(req model.VerifyCodeRequest) (model.LoginRespon
 	if err != nil {
 		return model.LoginResponse{}, values.Error, fmt.Sprintf("%s [CrTk]", values.SystemErr), err
 	}
+	//TODO: after verification invalidate the verification code
+
+	refreshToken, expiresAt, err := api.createRefreshToken(userID)
+	if err != nil {
+		return model.LoginResponse{}, values.Error, fmt.Sprintf("%s [CrRfTk]", values.SystemErr), err
+	}
+	// log.Println("Refresh token", refreshToken, "expires at", expiresAt)
+	// Store the refresh token in the database
+	err = api.StoreRefreshToken(ctx, user.ID.String(), refreshToken, expiresAt)
+	if err != nil {
+		return model.LoginResponse{}, values.Error, "Failed to store refresh token", err
+	}
 
 	loggedInUser := model.LoginResponse{
 		User: &model.LoginUserResponse{
@@ -232,7 +245,8 @@ func (api *API) VerifyCodeHelper(req model.VerifyCodeRequest) (model.LoginRespon
 			IsVerified:        user.IsVerified,
 			PreferredLanguage: user.PreferredLanguage,
 		},
-		Token: token,
+		Token:        token,
+		RefreshToken: refreshToken, // refreshToken,
 	}
 	return loggedInUser, values.Success, "Verification successful", nil
 }
@@ -285,6 +299,73 @@ func (api *API) ResendVerificationCode(req model.ResendCodeRequest) (string, str
 // 	}
 // 	return true, nil
 // }
+
+// func verifyGoogleIDToken(idToken string) (*model.UserInfo, error) {
+// 	config := &oauth2.Config{
+// 		ClientID: "YOUR_CLIENT_ID", // Ensure this matches your mobile app client ID
+// 	}
+
+// 	token, err := config.TokenSource(context.Background(), &oauth2.Token{AccessToken: idToken}).Token()
+// 	if err != nil {
+// 		return nil, err
+// 	}
+
+// 	claims := &UserInfo{}
+// 	jwtToken, err := jwt.ParseWithClaims(idToken, claims, func(token *jwt.Token) (interface{}, error) {
+// 		return googleOauthConfig.ClientSecret, nil // Replace with Google's public keys for better security
+// 	})
+
+// 	if err != nil || !jwtToken.Valid {
+// 		return nil, errors.New("invalid ID token")
+// 	}
+
+// 	return claims, nil
+// }
+
+func (api *API) RefreshAccessToken(ctx context.Context, refreshToken string) (string, string, error) {
+	// Validate the refresh token
+	claims, err := api.verifyToken(refreshToken, true)
+	if err != nil {
+		return "", "", fmt.Errorf("invalid or expired refresh token")
+	}
+
+	// Ensure the token type is "refresh"
+	if claims.Type != "refresh" {
+		return "", "", fmt.Errorf("invalid token type")
+	}
+
+	// Check if the refresh token is revoked or expired in the database
+	userID := claims.UserID
+	err = api.ValidateRefreshToken(ctx, refreshToken)
+	if err != nil {
+		return "", "", fmt.Errorf("refresh token validation failed: %w", err)
+	}
+
+	// Generate a new access token
+	accessToken, _, err := api.createToken(userID)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to generate access token: %w", err)
+	}
+
+	// Optionally, generate a new refresh token
+	newRefreshToken, expiresAt, err := api.createRefreshToken(userID)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to generate new refresh token: %w", err)
+	}
+
+	// Store the new refresh token and revoke the old one
+	err = api.StoreRefreshToken(ctx, userID, newRefreshToken, expiresAt)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to store new refresh token: %w", err)
+	}
+
+	err = api.RevokeRefreshToken(ctx, refreshToken)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to revoke old refresh token: %w", err)
+	}
+
+	return accessToken, newRefreshToken, nil
+}
 
 func (api *API) generateLink() {
 

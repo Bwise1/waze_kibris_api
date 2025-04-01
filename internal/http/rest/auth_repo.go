@@ -2,10 +2,12 @@ package rest
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"time"
 
 	"github.com/bwise1/waze_kibris/internal/model"
+	"github.com/jackc/pgx/v5"
 )
 
 // StoreVerificationToken(ctx context.Context, userID uuid.UUID, token string) error
@@ -90,6 +92,48 @@ func (api *API) StoreVerificationCode(ctx context.Context, userID string, email 
 		log.Println("error storing verification code", err)
 	}
 	return err
+}
+
+// StoreRefreshToken stores the refresh token in the database
+func (api *API) StoreRefreshToken(ctx context.Context, userID, token string, expiresAt time.Time) error {
+	query := `
+        INSERT INTO auth_tokens (user_id, token_type, token_value, expires_at, created_at)
+        VALUES ($1, 'refresh', $2, $3, NOW())
+    `
+	_, err := api.DB.Exec(ctx, query, userID, token, expiresAt)
+	if err != nil {
+		return fmt.Errorf("failed to store refresh token: %w", err)
+	}
+	return nil
+}
+
+func (api *API) ValidateRefreshToken(ctx context.Context, token string) error {
+	query := `
+        SELECT 1 FROM auth_tokens
+        WHERE token_value = $1 AND token_type = 'refresh' AND is_revoked = FALSE AND expires_at > NOW()
+    `
+	var exists int
+	err := api.DB.QueryRow(ctx, query, token).Scan(&exists)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return fmt.Errorf("refresh token is invalid or expired")
+		}
+		return err
+	}
+	return nil
+}
+
+func (api *API) RevokeRefreshToken(ctx context.Context, token string) error {
+	query := `
+        UPDATE auth_tokens
+        SET is_revoked = TRUE
+        WHERE token_value = $1
+    `
+	_, err := api.DB.Exec(ctx, query, token)
+	if err != nil {
+		return fmt.Errorf("failed to revoke refresh token: %w", err)
+	}
+	return nil
 }
 
 func (api *API) VerifyCodeRepo(ctx context.Context, code string, tokenType string, email string) (string, error) {

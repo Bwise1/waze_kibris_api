@@ -1,6 +1,7 @@
 package rest
 
 import (
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -23,6 +24,10 @@ func (api *API) ReportRoutes() chi.Router {
 		r.Method(http.MethodGet, "/{reportID}", Handler(api.GetReportByID))
 		r.Method(http.MethodPut, "/{id}", Handler(api.UpdateReport))
 		r.Method(http.MethodDelete, "/{id}", Handler(api.DeleteReport))
+		r.Method(http.MethodPost, "/{reportID}/votes", Handler(api.VoteOnReport))
+		r.Method(http.MethodGet, "/{reportID}/votes", Handler(api.GetVotes))
+		r.Method(http.MethodPost, "/{reportID}/comments", Handler(api.CommentOnReport))
+		r.Method(http.MethodGet, "/{reportID}/comments", Handler(api.GetComments))
 	})
 
 	return mux
@@ -230,5 +235,123 @@ func (api *API) DeleteReport(_ http.ResponseWriter, r *http.Request) *ServerResp
 		Message:    message,
 		Status:     status,
 		StatusCode: util.StatusCode(status),
+	}
+}
+
+func (api *API) VoteOnReport(_ http.ResponseWriter, r *http.Request) *ServerResponse {
+	tc := r.Context().Value(values.ContextTracingKey).(tracing.Context)
+
+	reportID := chi.URLParam(r, "reportID")
+	id, err := strconv.ParseInt(reportID, 10, 64)
+	if err != nil {
+		return respondWithError(err, "invalid report ID", values.BadRequestBody, &tc)
+	}
+
+	var req struct {
+		VoteType string `json:"vote_type"`
+	}
+	if decodeErr := util.DecodeJSONBody(&tc, r.Body, &req); decodeErr != nil {
+		return respondWithError(decodeErr, "unable to decode request", values.BadRequestBody, &tc)
+	}
+
+	userID, err := util.GetUserIDFromContext(r.Context())
+	if err != nil {
+		return respondWithError(err, "unable to get user ID from context", values.NotAuthorised, &tc)
+	}
+
+	vote := model.Vote{
+		ReportID: id,
+		UserID:   userID,
+		VoteType: req.VoteType,
+	}
+
+	err = api.AddVoteRepo(r.Context(), vote)
+	if err != nil {
+		return respondWithError(err, "failed to add vote", values.Error, &tc)
+	}
+
+	// Optionally, update the vote counts in the report
+	// You can implement logic to fetch the current vote counts and update them
+
+	return &ServerResponse{
+		Message:    "Vote added successfully",
+		Status:     values.Success,
+		StatusCode: util.StatusCode(values.Success),
+	}
+}
+
+func (api *API) CommentOnReport(_ http.ResponseWriter, r *http.Request) *ServerResponse {
+	tc := r.Context().Value(values.ContextTracingKey).(tracing.Context)
+
+	reportID := chi.URLParam(r, "reportID")
+	id, err := util.StringToUUID(reportID)
+	if err != nil {
+		return respondWithError(err, "invalid report ID", values.BadRequestBody, &tc)
+	}
+
+	var req struct {
+		Content string `json:"content"`
+	}
+	if decodeErr := util.DecodeJSONBody(&tc, r.Body, &req); decodeErr != nil {
+		return respondWithError(decodeErr, "unable to decode request", values.BadRequestBody, &tc)
+	}
+
+	userID, err := util.GetUserIDFromContext(r.Context())
+	if err != nil {
+		return respondWithError(err, "unable to get user ID from context", values.NotAuthorised, &tc)
+	}
+
+	comment := model.Comment{
+		ReportID: id,
+		UserID:   userID,
+		Comment:  req.Content,
+	}
+
+	err = api.AddCommentRepo(r.Context(), comment)
+	if err != nil {
+		return respondWithError(err, "failed to add comment", values.Error, &tc)
+	}
+
+	return &ServerResponse{
+		Message:    "Comment added successfully",
+		Status:     values.Success,
+		StatusCode: util.StatusCode(values.Success),
+		Data:       comment,
+	}
+}
+
+func (api *API) GetComments(_ http.ResponseWriter, r *http.Request) *ServerResponse {
+	tc := r.Context().Value(values.ContextTracingKey).(tracing.Context)
+
+	reportID := chi.URLParam(r, "reportID")
+
+	comments, err := api.GetCommentsRepo(r.Context(), reportID)
+	if err != nil {
+		return respondWithError(err, "failed to get comments", values.Error, &tc)
+	}
+
+	return &ServerResponse{
+		Message:    "Comments retrieved successfully",
+		Status:     values.Success,
+		StatusCode: util.StatusCode(values.Success),
+		Data:       comments,
+	}
+}
+
+func (api *API) GetVotes(_ http.ResponseWriter, r *http.Request) *ServerResponse {
+	tc := r.Context().Value(values.ContextTracingKey).(tracing.Context)
+	reportID := chi.URLParam(r, "reportID")
+
+	votes, err := api.GetVotesRepo(r.Context(), reportID)
+	if err != nil {
+		log.Println("error getting votes", err)
+		return respondWithError(err, "failed to get votes", values.Error, &tc)
+	}
+
+	return &ServerResponse{
+		Message:    "Votes retrieved successfully",
+		Status:     values.Success,
+		StatusCode: util.StatusCode(values.Success),
+		Data:       votes,
 	}
 }
