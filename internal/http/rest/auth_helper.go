@@ -2,6 +2,8 @@ package rest
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -11,6 +13,9 @@ import (
 	"github.com/bwise1/waze_kibris/util"
 	"github.com/bwise1/waze_kibris/util/values"
 	"github.com/golang-jwt/jwt"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"google.golang.org/api/idtoken"
 )
 
 // func GenerateTokenPair(userID uuid.UUID) (*TokenPair, error)
@@ -300,27 +305,157 @@ func (api *API) ResendVerificationCode(req model.ResendCodeRequest) (string, str
 // 	return true, nil
 // }
 
-// func verifyGoogleIDToken(idToken string) (*model.UserInfo, error) {
-// 	config := &oauth2.Config{
-// 		ClientID: "YOUR_CLIENT_ID", // Ensure this matches your mobile app client ID
-// 	}
-
-// 	token, err := config.TokenSource(context.Background(), &oauth2.Token{AccessToken: idToken}).Token()
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	claims := &UserInfo{}
-// 	jwtToken, err := jwt.ParseWithClaims(idToken, claims, func(token *jwt.Token) (interface{}, error) {
-// 		return googleOauthConfig.ClientSecret, nil // Replace with Google's public keys for better security
-// 	})
-
-// 	if err != nil || !jwtToken.Valid {
-// 		return nil, errors.New("invalid ID token")
-// 	}
-
-// 	return claims, nil
 // }
+
+func (api *API) verifyGoogleIDToken(idToken string) (*model.NewUserInfo, error) {
+	tokenValidator, err := idtoken.NewValidator(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("failed to create validator: %v", err)
+	}
+
+	payload, err := tokenValidator.Validate(context.Background(), idToken, api.Config.GoogleClientID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid token: %v", err)
+	}
+
+	userInfo := &model.NewUserInfo{
+		ID:        payload.Subject,
+		Email:     payload.Claims["email"].(string),
+		FirstName: payload.Claims["given_name"].(string),
+		LastName:  payload.Claims["family_name"].(string),
+	}
+
+	return userInfo, nil
+}
+
+// Helper function to generate and store tokens to reduce duplication
+func (api *API) generateAndStoreTokens(user model.User) (model.LoginResponse, string, string, error) {
+	// Generate and store tokens
+
+	ctx := context.TODO()
+	token, _, err := api.createToken(user.ID.String())
+	if err != nil {
+		return model.LoginResponse{}, values.Error, "Failed to create access token", err
+	}
+
+	refreshToken, expiresAt, err := api.createRefreshToken(user.ID.String())
+	if err != nil {
+		return model.LoginResponse{}, values.Error, "Failed to create refresh token", err
+	}
+
+	err = api.StoreRefreshToken(ctx, user.ID.String(), refreshToken, expiresAt)
+	if err != nil {
+		return model.LoginResponse{}, values.Error, "Failed to store refresh token", err
+	}
+
+	user, err = api.GetUserByID(ctx, user.ID.String())
+	if err != nil {
+		return model.LoginResponse{}, values.Error, "Failed to retrieve user", err
+	}
+
+	// Prepare and return the response
+	response := model.LoginResponse{
+		User: &model.LoginUserResponse{
+			ID:                user.ID,
+			FirstName:         user.FirstName,
+			LastName:          user.LastName,
+			Email:             user.Email,
+			IsVerified:        user.IsVerified,
+			PreferredLanguage: user.PreferredLanguage,
+		},
+		Token:        token,
+		RefreshToken: refreshToken,
+	}
+
+	return response, values.Success, "Login successful", nil
+}
+
+func (api *API) GoogleLogin(idToken string) (model.LoginResponse, string, string, error) {
+	var ctx = context.TODO()
+
+	// Step 1: Verify the Google ID token
+	userInfo, err := api.verifyGoogleIDToken(idToken)
+	if err != nil {
+		return model.LoginResponse{}, values.NotAuthorised, "Invalid Google ID token", err
+	}
+
+	email := userInfo.Email
+	googleUserID := userInfo.ID
+
+	// Step 2: Check if the Google account is already linked to any user
+	authRecord, err := api.GetUserAuthProviderByProviderID(ctx, "google", googleUserID)
+	log.Println("auth get user error", err)
+
+	// Fix: Check for pgx.ErrNoRows instead of sql.ErrNoRows
+	if err == nil {
+		// Google account is linked to a user; fetch the user
+		user, err := api.GetUserByID(ctx, authRecord.UserID.String())
+		if err != nil {
+			return model.LoginResponse{}, values.Error, "Failed to retrieve user", err
+		}
+		if user.Email != email {
+			return model.LoginResponse{}, values.Conflict, "Google account is linked to a different email", nil
+		}
+
+		// Generate tokens for the existing user
+		return api.generateAndStoreTokens(user)
+	} else if errors.Is(err, pgx.ErrNoRows) || err.Error() == "no rows in result set" {
+		log.Println("Google account not linked; checking if user exists by email")
+		// Google account not linked; check if user exists by email
+		user, err := api.GetUserByEmail(ctx, email)
+		if err != nil {
+			// Check if the error is specifically "no rows found"
+			if errors.Is(err, pgx.ErrNoRows) || errors.Is(err, sql.ErrNoRows) || err.Error() == "no rows in result set" {
+				// No user exists; register a new user
+				newUser := model.User{
+					ID:           util.GenerateUUID(),
+					Email:        email,
+					FirstName:    &userInfo.FirstName,
+					LastName:     &userInfo.LastName,
+					AuthProvider: "google",
+					IsVerified:   true, // Google has verified the email
+				}
+				newGUser, err := api.CreateGoogleUserRepo(ctx, newUser)
+				if err != nil {
+					return model.LoginResponse{}, values.Error, "Failed to create new user", err
+				}
+
+				// Link the Google account
+				authRecord := model.UserAuthProvider{
+					UserID:         newGUser.ID,
+					AuthProvider:   "google",
+					AuthProviderID: googleUserID,
+				}
+				_, err = api.InsertUserAuthProvider(ctx, authRecord)
+				if err != nil {
+					return model.LoginResponse{}, values.Error, "Failed to link Google account", err
+				}
+
+				return api.generateAndStoreTokens(newGUser)
+			} else {
+				return model.LoginResponse{}, values.Error, "Database error", err
+			}
+		} else {
+			// User exists but not linked to Google; link the account
+			authRecord := model.UserAuthProvider{
+				UserID:         user.ID,
+				AuthProvider:   "google",
+				AuthProviderID: googleUserID,
+			}
+			_, err = api.InsertUserAuthProvider(ctx, authRecord)
+			if err != nil {
+				if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "23505" { // unique_violation
+					return model.LoginResponse{}, values.Conflict, "Google account is already linked to another user", err
+				}
+				return model.LoginResponse{}, values.Error, "Failed to link Google account", err
+			}
+
+			return api.generateAndStoreTokens(user)
+		}
+	} else {
+		return model.LoginResponse{}, values.Error, "Database error checking Google linkage", err
+	}
+}
 
 func (api *API) RefreshAccessToken(ctx context.Context, refreshToken string) (string, string, error) {
 	// Validate the refresh token

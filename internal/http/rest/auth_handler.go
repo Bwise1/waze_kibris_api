@@ -44,7 +44,7 @@ func (api *API) AuthRoutes() chi.Router {
 	mux.Method(http.MethodPost, "/resend", Handler(api.ResendCode))
 	mux.Method(http.MethodPost, "/google/create", Handler(api.CreateAccountWithGoogle))
 	mux.Method(http.MethodPost, "/refresh", Handler(api.RefreshTokenHandler)) // Add this line
-	mux.Method(http.MethodPost, "/google/login", Handler(api.LoginWithGoogle))
+	mux.Method(http.MethodPost, "/google/login", Handler(api.MobileGoogleLogin))
 	return mux
 }
 
@@ -155,6 +155,29 @@ func (api *API) LoginWithGoogle(_ http.ResponseWriter, r *http.Request) *ServerR
 			"token": tokenString,
 			"user":  user,
 		},
+	}
+}
+
+func (api *API) MobileGoogleLogin(_ http.ResponseWriter, r *http.Request) *ServerResponse {
+	tc := r.Context().Value(values.ContextTracingKey).(tracing.Context)
+
+	var req struct {
+		IDToken string `json:"id_token"`
+	}
+	if decodeErr := util.DecodeJSONBody(&tc, r.Body, &req); decodeErr != nil {
+		return respondWithError(decodeErr, "unable to decode request", values.BadRequestBody, &tc)
+	}
+
+	user, status, message, err := api.GoogleLogin(req.IDToken)
+	if err != nil {
+		return respondWithError(err, message, status, &tc)
+	}
+
+	return &ServerResponse{
+		Message:    message,
+		Status:     status,
+		StatusCode: util.StatusCode(status),
+		Data:       user,
 	}
 }
 

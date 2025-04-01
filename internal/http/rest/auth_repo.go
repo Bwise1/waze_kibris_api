@@ -44,6 +44,47 @@ func (api *API) CreateNewUserRepo(ctx context.Context, req model.User) error {
 	return nil
 }
 
+func (api *API) CreateGoogleUserRepo(ctx context.Context, req model.User) (model.User, error) {
+
+	// SQL statement to insert the user and return all relevant fields
+	stmt := `
+        INSERT INTO users (
+            id,
+            email,
+            firstname,
+            lastname,
+            auth_provider,
+            is_verified
+        ) VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING id, email, firstname, lastname, auth_provider, is_verified, preferred_language
+    `
+
+	var user model.User
+	// Execute the query and scan the returned values into the user struct
+	err := api.Deps.DB.Pool().QueryRow(ctx, stmt,
+		req.ID,
+		req.Email,
+		req.FirstName,
+		req.LastName,
+		req.AuthProvider,
+		req.IsVerified,
+	).Scan(
+		&user.ID,
+		&user.Email,
+		&user.FirstName,
+		&user.LastName,
+		&user.AuthProvider,
+		&user.IsVerified,
+		&user.PreferredLanguage,
+	)
+	if err != nil {
+		log.Println("error creating new Google user", err)
+		return model.User{}, err
+	}
+
+	return user, nil
+}
+
 func (api *API) GetUserByEmail(ctx context.Context, email string) (model.User, error) {
 	var user model.User
 	stmt := `-- name: get-user-by-email
@@ -159,6 +200,44 @@ func (api *API) UpdateEmailVerifiedStatus(ctx context.Context, userID string) er
 	return nil
 }
 
-func (api *API) verifyTokenRepo() (*string, error) {
-	return nil, nil
+// InsertUserAuthProvider inserts a new record into the user_auth_providers table
+func (api *API) InsertUserAuthProvider(ctx context.Context, uauthRecord model.UserAuthProvider) (model.UserAuthProvider, error) {
+	var authRecord model.UserAuthProvider
+	stmt := `
+		INSERT INTO user_auth_providers (user_id, auth_provider, auth_provider_id)
+		VALUES ($1, $2, $3)
+		RETURNING id, user_id, auth_provider, auth_provider_id
+	`
+
+	err := api.Deps.DB.Pool().QueryRow(ctx, stmt, uauthRecord.UserID, uauthRecord.AuthProvider, uauthRecord.AuthProviderID).Scan(
+		&authRecord.ID,
+		&authRecord.UserID,
+		&authRecord.AuthProvider,
+		&authRecord.AuthProviderID,
+	)
+	if err != nil {
+		log.Println("error inserting into user_auth_providers", err)
+		return model.UserAuthProvider{}, err
+	}
+
+	return authRecord, nil
+}
+
+func (api *API) GetUserAuthProviderByProviderID(ctx context.Context, authProvider, authProviderID string) (model.UserAuthProvider, error) {
+	var authRecord model.UserAuthProvider
+	stmt := `
+        SELECT id, user_id, auth_provider, auth_provider_id
+        FROM user_auth_providers
+        WHERE auth_provider = $1 AND auth_provider_id = $2
+    `
+	err := api.Deps.DB.Pool().QueryRow(ctx, stmt, authProvider, authProviderID).Scan(
+		&authRecord.ID,
+		&authRecord.UserID,
+		&authRecord.AuthProvider,
+		&authRecord.AuthProviderID,
+	)
+	if err != nil {
+		return model.UserAuthProvider{}, err
+	}
+	return authRecord, nil
 }

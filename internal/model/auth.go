@@ -52,3 +52,18 @@ type UserInfo struct {
 	FamilyName    string `json:"family_name"`
 	Picture       string `json:"picture"`
 }
+
+type NewUserInfo struct {
+	ID        string
+	Email     string
+	FirstName string
+	LastName  string
+}
+
+type UserAuthProvider struct {
+	ID             int       // SERIAL PRIMARY KEY
+	UserID         uuid.UUID // UUID as string
+	AuthProvider   string    // e.g., "google"
+	AuthProviderID string    // e.g., "google_user_123"
+
+}
