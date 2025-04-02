@@ -9,6 +9,7 @@ import (
 
 	"github.com/bwise1/waze_kibris/config"
 	deps "github.com/bwise1/waze_kibris/internal/debs"
+	"github.com/bwise1/waze_kibris/internal/http/valhalla"
 	smtp "github.com/bwise1/waze_kibris/util/email"
 	"github.com/bwise1/waze_kibris/util/values"
 	"github.com/go-chi/chi/v5"
@@ -35,11 +36,12 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 type API struct {
-	Server *http.Server
-	Config *config.Config
-	Deps   *deps.Dependencies
-	Mailer *smtp.Mailer
-	DB     *pgxpool.Pool
+	Server         *http.Server
+	Config         *config.Config
+	Deps           *deps.Dependencies
+	Mailer         *smtp.Mailer
+	DB             *pgxpool.Pool
+	ValhallaClient *valhalla.ValhallaClient
 }
 
 func (api *API) Serve() error {
@@ -67,6 +69,7 @@ func (api *API) setUpServerHandler() http.Handler {
 	mux.Mount("/reports", api.ReportRoutes())
 	mux.Mount("/saved-locations", api.SavedLocationRoutes())
 	mux.Mount("/user", api.UserRoutes())
+	mux.Mount("/route", api.RoutingRoutes())
 
 	//websocket
 	mux.HandleFunc("/ws", api.Deps.WebSocket.HandleConnections)

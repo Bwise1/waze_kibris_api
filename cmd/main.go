@@ -11,6 +11,7 @@ import (
 	"github.com/bwise1/waze_kibris/internal/db"
 	deps "github.com/bwise1/waze_kibris/internal/debs"
 	api "github.com/bwise1/waze_kibris/internal/http/rest"
+	"github.com/bwise1/waze_kibris/internal/http/valhalla"
 	smtp "github.com/bwise1/waze_kibris/util/email"
 )
 
@@ -28,11 +29,14 @@ func main() {
 	if err != nil {
 		log.Panicln("failed to connect to database", "error", err)
 	}
+	valhallaClient := valhalla.NewValhallaClient(cfg.ValhallaURL)
+	log.Printf("Valhalla client initialized with BaseURL: %s", cfg.ValhallaURL)
 	a := &api.API{
-		Config: cfg,
-		Deps:   deps,
-		Mailer: mailer,
-		DB:     database.Pool(),
+		Config:         cfg,
+		Deps:           deps,
+		Mailer:         mailer,
+		DB:             database.Pool(),
+		ValhallaClient: valhallaClient,
 	}
 	a.Init()
 	go deps.WebSocket.Run()

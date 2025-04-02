@@ -26,6 +26,7 @@ type Config struct {
 	GoogleClientID      string `env:"GOOGLE_CLIENT_ID"`
 	GoogleClientSecret  string `env:"GOOGLE_CLIENT_SECRET"`
 	GoogleRedirectURL   string `env:"GOOGLE_REDIRECT_URL"`
+	ValhallaURL         string `env:"VALHALLA_URL"`
 }
 
 func New() *Config {
