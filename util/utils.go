@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"html/template"
+	"log"
 	"math/rand"
 	"net/url"
 	"regexp"
@@ -12,10 +13,12 @@ import (
 	"unicode"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/twpayne/go-polyline"
 )
 
 var (
-	RgxEmail = regexp.MustCompile("^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$")
+	RgxEmail         = regexp.MustCompile("^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$")
+	shortCodeCharset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 )
 
 func NotBlank(value string) bool {
@@ -100,4 +103,21 @@ func PointFromLatLon(lat, lon float64) pgtype.Point {
 			Y: lat,
 		},
 	}
+}
+
+func DecodePolyLines(shape string) ([][]float64, error) {
+	decoded, _, err := polyline.DecodeCoords([]byte(shape))
+	if err != nil {
+		log.Println("error deocoding polyline: ", err)
+		return nil, fmt.Errorf("failed to decode polyline %w", err)
+	}
+	return decoded, nil
+}
+
+func GenerateShortCode(length int) string {
+	b := make([]byte, length)
+	for i := range b {
+		b[i] = shortCodeCharset[rand.Intn(len(shortCodeCharset))]
+	}
+	return string(b)
 }
