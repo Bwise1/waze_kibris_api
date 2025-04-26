@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"math"
 	"net/http"
 	"time"
 )
@@ -165,27 +164,10 @@ type Maneuver struct {
 
 // --- Mobile-Friendly Formatted Structures ---
 
-// MobileRoute represents a single formatted route option for the mobile app
-type MobileRoute struct {
-	RouteID      string  `json:"routeId"`         // e.g., "primary", "alternative-0", "alternative-1"
-	IsFastest    bool    `json:"isFastest"`       // True if this is the primary route
-	DurationSecs float64 `json:"durationSeconds"` // Total time in seconds
-	DurationText string  `json:"durationText"`    // Formatted time (e.g., "22 min")
-	LengthMeters float64 `json:"lengthMeters"`    // Total distance in meters (consistent unit)
-	LengthText   string  `json:"lengthText"`      // Formatted distance (e.g., "16.6 km" or "10.3 mi")
-	Polyline     string  `json:"polyline"`        // Encoded polyline for drawing on map
-	SummaryText  string  `json:"summaryText"`     // Combined summary (e.g., "22 min · 16.6 km")
-	HasTolls     bool    `json:"hasTolls"`        // Simplified flag
-	HasHighways  bool    `json:"hasHighways"`     // Simplified flag
-	// Add simplified maneuver list or start/end street names if needed
-	// StartStreet string `json:"startStreet,omitempty"`
-	// EndStreet   string `json:"endStreet,omitempty"`
-}
-
 // --- Client Method ---
 
 // GetRoute fetches a route from Valhalla using the enhanced request structure
-func (vc *ValhallaClient) GetRoute(ctx context.Context, request RouteRequest) (*RouteResponse, error) {
+func (vc *ValhallaClient) GetRoute(ctx context.Context, request RouteRequest) (*MobileRouteResponse, error) {
 	url := fmt.Sprintf("%s/route", vc.BaseURL)
 
 	// Marshal the request payload
@@ -236,83 +218,7 @@ func (vc *ValhallaClient) GetRoute(ctx context.Context, request RouteRequest) (*
 		// Consider returning a more specific error or allowing empty result depending on use case
 		// return nil, fmt.Errorf("no route found or error in Valhalla response (Status: %d, Msg: %s)", routeResponse.Trip.Status, routeResponse.Trip.StatusMessage)
 	}
+	mobileResponse, err := FormatRouteForMobile(&routeResponse)
 
-	return &routeResponse, nil
-}
-
-// --- Formatting Function ---
-
-// FormatRouteResponseForMobile converts the raw Valhalla response into a mobile-friendly format.
-func FormatRouteResponseForMobile(resp *RouteResponse) []MobileRoute {
-	if resp == nil || len(resp.Trip.Legs) == 0 {
-		// Handle cases where no primary route is found
-		return []MobileRoute{} // Return empty slice
-	}
-
-	formattedRoutes := []MobileRoute{}
-	units := resp.Trip.Units // Get units from the primary trip response ("miles" or "kilometers")
-
-	// --- Format Primary Route ---
-	primaryRoute := formatSingleTrip(resp.Trip, "primary", true, units)
-	formattedRoutes = append(formattedRoutes, primaryRoute)
-
-	// --- Format Alternative Routes ---
-	// Check if alternatives are nested inside the main trip or at the top level
-	alternatives := resp.Alternates // Assumes alternatives are at the top level
-	// if len(resp.Trip.Alternates) > 0 { // Uncomment if alternatives are nested in Trip
-	//  alternatives = resp.Trip.Alternates
-	// }
-
-	for i, altTrip := range alternatives {
-		routeID := fmt.Sprintf("alternative-%d", i)
-		altRoute := formatSingleTrip(altTrip, routeID, false, units) // isFastest is false
-		formattedRoutes = append(formattedRoutes, altRoute)
-	}
-
-	return formattedRoutes
-}
-
-// formatSingleTrip formats one Valhalla Trip object into a MobileRoute object.
-func formatSingleTrip(trip Trip, routeID string, isFastest bool, units string) MobileRoute {
-	durationSecs := trip.Summary.Time
-	length := trip.Summary.Length // Length is already in the units specified in the request (km or miles)
-
-	var lengthMeters float64
-	var lengthText string
-	var durationText string
-
-	// Convert length to meters consistently and create formatted text
-	if units == "miles" {
-		lengthMeters = length * 1609.34
-		lengthText = fmt.Sprintf("%.1f mi", length)
-	} else { // Default to kilometers
-		lengthMeters = length * 1000
-		lengthText = fmt.Sprintf("%.1f km", length)
-	}
-
-	// Format duration
-	durationMinutes := math.Round(durationSecs / 60)
-	durationText = fmt.Sprintf("%.0f min", durationMinutes)
-
-	// Combine summary text
-	summaryText := fmt.Sprintf("%s · %s", durationText, lengthText)
-
-	// Extract polyline (assuming single leg for simplicity, adjust if multi-leg trips are common)
-	polyline := ""
-	if len(trip.Legs) > 0 {
-		polyline = trip.Legs[0].Shape
-	}
-
-	return MobileRoute{
-		RouteID:      routeID,
-		IsFastest:    isFastest,
-		DurationSecs: durationSecs,
-		DurationText: durationText,
-		LengthMeters: lengthMeters,
-		LengthText:   lengthText,
-		Polyline:     polyline,
-		SummaryText:  summaryText,
-		HasTolls:     trip.Summary.HasTollRoad,
-		HasHighways:  trip.Summary.HasHighway,
-	}
+	return mobileResponse, nil
 }

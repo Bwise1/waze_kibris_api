@@ -50,8 +50,9 @@ func (api *API) GetRouteHandler(_ http.ResponseWriter, r *http.Request) *ServerR
 
 	// Fetch the route
 	routeResponse, err := valhallaClient.GetRoute(context.TODO(), valhalla.RouteRequest{
-		Locations: req.Locations,
-		Costing:   req.Costing,
+		Locations:  req.Locations,
+		Costing:    req.Costing,
+		Alternates: util.IntPtr(3),
 	})
 	if err != nil {
 		log.Println("Error fetching route:", err)

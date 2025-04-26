@@ -14,6 +14,14 @@ func TestPolyLineDecoder(t *testing.T) {
 	t.Logf("decode %v", result)
 }
 
+func TestValhallaDecode(t *testing.T){
+	encoded:="qlvcbAwspp~@}AxAwKfKcUhUoYbVq]|X{UtQgc@zZ_KrGoFjCwDrBsCpDw@fAuAxBcBpGuBlCgB|@qCPcCYQeDGmDR_Dh@gLBoKeAuPqCca@kEs`@kDcRkB}JkB}JqAoGa@oB}AyHyEmU}Pov@qLsj@aCwLoFoYoNku@sCwJ{A}FuIgMqIwHsFqA_FsCuEqF{CkHsAuIIaJpAeKhDuIpAyMFiMa@uJwA{JyFiXiCkLuEgQmOiq@c[wvAya@okBaDcO_Kae@o@wCaHub@aCoUiAiTa@yl@t@ol@jBce@rDua@lBqPUqAa@mBcAkCy@mAkAiAaBeAuD}A}Qw@gSiAuT_A_ESmFHsJrBaJlEeT|Nwi@~]_uAd|@uO`Kow@tg@ajA~w@cOtLg[z\\oF~Fqc@tl@aUjWiUxO_h@~[uMpHoI|HgA~Ao@x@_Cr@eCG{BgAmTq@}WX}Yd@}G@k_@f@}Wd@as@lAgUvCmFl@yUnFqRlGeQzFaKnAeBTeRVkh@jBoCNyCVqBKoj@bBcEPoDEqDbA}EpAaFjD}j@vn@uK~I{L~G_NxD}YlIaRbE_Fv@qDBiH_@qHeAw|@cT}KSeFUoMcAqM]wHGoEA{[c@e_@Ter@NqRCcNIoGAwWA_KAsGpBiDlAeEvCwBvCiAnFi@dHZ|GlBxGbDzDtFbDzFXbG_AvFmEhCkGrA{HrAyH{@ih@M_MRkc@NyKNmLl@_YpDep@zBwRrDiYtE}X~Hsc@hKui@rj@}eCjXmuAhn@{xC`u@meDfRmu@tL}c@bLma@fTmv@na@qyAnWo}@rHmY|Gy[lMiu@dJsi@tFm[dIwd@jHq`@hJcd@rOkj@|Ske@t[sk@|o@goAfc@wx@x[am@jUad@hJ}RtDsMjCwL`CoLfBwLpAyK~@_Lh@mIX{KJsKGeHC_C]_Jo@aLeA_M_DiZoG{m@}CwM}EmKsCoBuB{CoAeE]yERyEdAkE`@{@l@yIf@eJ@uJ}@gSiB{PmNqvAcHou@wD_k@kKwtBiGqiAyC}x@aCsj@}GcvAyFsaAwGa}@YuD}Ekl@qAwOsCe[uBgMcDaMcHiPwC_D}AwDq@qEAwEl@qEx@_CnBeWTkMoA_s@s@uj@e@uj@Vwv@b@gb@bAwYzHmnAjEmo@fFqs@fDih@fGqp@vEgr@jAeQfGkz@tD}s@XwaAQq]aB{[yEcn@oJmfAgKaq@kKcj@kAgGqr@wvD_M_w@wDa\\Q_BsAgLoCol@cAcq@i@uK}C{MgDsJiCgDcBiEaAiGEsGv@kGtAcEvBgDzGcQrBoNn@eOAaJQe}@c@a~@G_Q_@sNy@{PiAiOuAsKu@kHK}@UuBuHmd@cBwIs@oDeK_[{EqJsCoCsCqCuJmEoCc@yDqBuCqD_B_Fc@{FHwCfA}FfCqEvDqChEaAnENzG_ElJcEnVuShUaPlQkP`IsIpqAcvAbRgS|wBa}Blh@ej@r^_`@jIyIx[y\\nJoLrZ_ZtXcZxCaDbGkHfV{YvOuPhDqDrSaS"
+	result, err := DecodeValhallaPolyline6(encoded)
+	if err != nil {
+		t.Fatalf("Decoding returned error %v", err)
+	}
+	t.Logf("decode %v", result)
+}
 func TestFormatTime(t *testing.T) {
 	testTime := time.Date(2025, 4, 5, 14, 30, 45, 0, time.UTC)
 
