@@ -81,10 +81,15 @@ type DateTime struct {
 // (Using the detailed structure you provided, which is good)
 
 // RouteResponse represents the raw, detailed response from the /route endpoint
+
+type AlternateTrip struct {
+	Trip Trip `json:"trip"`
+}
+
 type RouteResponse struct {
-	Trip       Trip    `json:"trip"`
-	Alternates []Trip  `json:"alternates,omitempty"` // Include alternates directly if API provides them at top level
-	ID         *string `json:"id,omitempty"`         // Echoes request ID if provided
+	Trip       Trip            `json:"trip"`
+	Alternates []AlternateTrip `json:"alternates,omitempty"` // Include alternates directly if API provides them at top level
+	ID         *string         `json:"id,omitempty"`         // Echoes request ID if provided
 	// Note: Sometimes alternatives are nested within the 'trip' itself. Adjust if needed based on actual Valhalla output.
 	// If alternatives are nested inside trip:
 	// Trip struct { ... Alternates []Trip `json:"alternates,omitempty"` }
@@ -219,6 +224,8 @@ func (vc *ValhallaClient) GetRoute(ctx context.Context, request RouteRequest) (*
 		// return nil, fmt.Errorf("no route found or error in Valhalla response (Status: %d, Msg: %s)", routeResponse.Trip.Status, routeResponse.Trip.StatusMessage)
 	}
 	mobileResponse, err := FormatRouteForMobile(&routeResponse)
-
+	if err != nil {
+		return nil, fmt.Errorf("failed to format Valhalla route response: %w", err)
+	}
 	return mobileResponse, nil
 }

@@ -56,7 +56,6 @@ func (api *API) GetRouteHandler(_ http.ResponseWriter, r *http.Request) *ServerR
 	})
 	if err != nil {
 		log.Println("Error fetching route:", err)
-		log.Println("HERER")
 		return respondWithError(err, "Invalid request payload", values.BadRequestBody, &tc)
 	}
 	// Format for mobile

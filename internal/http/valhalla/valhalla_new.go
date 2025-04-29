@@ -3,6 +3,7 @@ package valhalla
 import (
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/bwise1/waze_kibris/util"
@@ -58,8 +59,10 @@ type MobileManeuver struct {
 	TimeSeconds    float64 `json:"timeSeconds"`    // Time for this step
 	// Optional: Add coordinates for the start of the maneuver for easier map interaction
 	StartCoordinates []float64 `json:"startCoordinates,omitempty"` // [lon, lat]
+	StreetName       string    `json:"streetName,omitempty"`
 	// Optional: Include original type if mobile needs it for specific logic
 	// OriginalType    int       `json:"originalType,omitempty"`
+
 }
 
 // --- Formatting Helper Functions ---
@@ -174,12 +177,17 @@ func formatTripForMobile(trip *Trip) (*MobileTrip, error) {
 		// Process Maneuvers
 		for _, maneuver := range leg.Maneuvers {
 			maneuverDistMeters := maneuver.Length * metersFactor
+			streetName := ""
+			if len(maneuver.StreetNames) > 0 {
+				streetName = strings.Join(maneuver.StreetNames, " ; ")
+			}
 			mobileManeuver := MobileManeuver{
 				Type: util.MapValhallaManeuverType(maneuver.Type),
 				// OriginalType: maneuver.Type // Uncomment if mobile needs the int too
 				Instruction:    maneuver.Instruction,
 				DistanceMeters: maneuverDistMeters,
 				TimeSeconds:    maneuver.Time,
+				StreetName:     streetName,
 			}
 			// Add start coordinates if possible
 			if len(mobileCoords) > maneuver.BeginShapeIndex {
@@ -199,6 +207,7 @@ func FormatRouteForMobile(resp *RouteResponse) (*MobileRouteResponse, error) {
 	if resp == nil {
 		return nil, fmt.Errorf("received nil RouteResponse")
 	}
+	// log.Println(resp.Alternates)
 
 	mobileResp := MobileRouteResponse{
 		ID:           resp.ID,
@@ -220,7 +229,9 @@ func FormatRouteForMobile(resp *RouteResponse) (*MobileRouteResponse, error) {
 
 	// Process alternatives
 	for i, altTrip := range resp.Alternates {
-		formattedAlt, err := formatTripForMobile(&altTrip) // Process pointer to avoid copying large struct
+		// log.Printf("alt trip %d", i)
+		// log.Println(altTrip)
+		formattedAlt, err := formatTripForMobile(&altTrip.Trip) // Process pointer to avoid copying large struct
 		if err != nil {
 			log.Println("In the alternatives")
 			// Log and potentially add a note to ErrorMessage, but continue
