@@ -78,6 +78,92 @@ type PlaceDetailResponse struct {
 	Properties map[string]interface{} `json:"properties"` // Full place details
 }
 
+type GeocodingResponse struct {
+	Geocoding struct {
+		Attribution string `json:"attribution"`
+		Query       struct {
+			Ids []string `json:"ids"`
+		} `json:"query"`
+	} `json:"geocoding"`
+	Type     string    `json:"type"` // "FeatureCollection"
+	Bbox     []float64 `json:"bbox"` // [minLon, minLat, maxLon, maxLat]
+	Features []struct {
+		Type     string `json:"type"` // "Feature"
+		Geometry struct {
+			Type        string    `json:"type"` // "Point", "Polygon", etc.
+			Coordinates []float64 `json:"coordinates"`
+		} `json:"geometry"`
+		Bbox       []float64 `json:"bbox,omitempty"`
+		Properties struct {
+			Gid     string `json:"gid"`   // "openstreetmap:venue:way/568367632"
+			Layer   string `json:"layer"` // "poi", "address", etc.
+			Sources []struct {
+				Source   string `json:"source"`    // "openstreetmap"
+				SourceID string `json:"source_id"` // "way/568367632"
+				FixitURL string `json:"fixit_url,omitempty"`
+			} `json:"sources"`
+			Precision             string   `json:"precision"`      // "centroid", "rooftop", etc.
+			Name                  string   `json:"name,omitempty"` // "Ikeja City Mall"
+			FormattedAddressLines []string `json:"formatted_address_lines,omitempty"`
+			FormattedAddressLine  string   `json:"formatted_address_line,omitempty"`
+			CoarseLocation        string   `json:"coarse_location,omitempty"` // "Ikeja, Lagos, Nigeria"
+			AddressComponents     struct {
+				Number string `json:"number,omitempty"` // "174/194"
+				Street string `json:"street,omitempty"` // "Obafemi Awolowo Way"
+			} `json:"address_components,omitempty"`
+			Context struct {
+				WhosOnFirst struct {
+					Country struct {
+						Gid          string `json:"gid"`          // "whosonfirst:country:85632735"
+						Name         string `json:"name"`         // "Nigeria"
+						Abbreviation string `json:"abbreviation"` // "NGA"
+					} `json:"country"`
+					Region struct {
+						Gid          string `json:"gid"`          // "whosonfirst:region:85675343"
+						Name         string `json:"name"`         // "Lagos"
+						Abbreviation string `json:"abbreviation"` // "LA"
+					} `json:"region"`
+					County struct {
+						Gid          string `json:"gid"`          // "whosonfirst:county:421181827"
+						Name         string `json:"name"`         // "Ikeja"
+						Abbreviation string `json:"abbreviation"` // "IJ"
+					} `json:"county"`
+					Locality struct {
+						Gid  string `json:"gid"`  // "whosonfirst:locality:421195263"
+						Name string `json:"name"` // "Ikeja"
+					} `json:"locality"`
+				} `json:"whosonfirst,omitempty"`
+				Iso3166A2 string `json:"iso_3166_a2,omitempty"` // "NG"
+				Iso3166A3 string `json:"iso_3166_a3,omitempty"` // "NGA"
+			} `json:"context,omitempty"`
+			Addendum struct {
+				OSM struct {
+					OpeningHours string `json:"opening_hours,omitempty"` // "Mo-Su 09:00-21:00"
+					Phone        string `json:"phone,omitempty"`         // "+234-708-068-0230"
+					Website      string `json:"website,omitempty"`       // "https://ikejacitymall.com.ng/"
+				} `json:"osm,omitempty"`
+			} `json:"addendum,omitempty"`
+		} `json:"properties"`
+	} `json:"features"`
+}
+
+type AutocompleteSuggestion struct {
+	GID            string `json:"gid"`
+	Name           string `json:"name"`
+	CoarseLocation string `json:"coarse_location"`
+	Layer          string `json:"layer"`
+}
+
+type PlaceDetails struct {
+	Name      string  `json:"name"`
+	Address   string  `json:"address"`
+	Latitude  float64 `json:"latitude"`
+	Longitude float64 `json:"longitude"`
+	Phone     string  `json:"phone,omitempty"`
+	Website   string  `json:"website,omitempty"`
+	Hours     string  `json:"hours,omitempty"`
+}
+
 // --- Geocoding API Functions ---
 
 // buildURL constructs the API URL with query parameters.
@@ -134,7 +220,31 @@ func (c *Client) Search(ctx context.Context, text string, params *GeocodeQuery) 
 
 // Autocomplete provides address suggestions using v2 API.
 // Endpoint: /geocoding/v2/autocomplete
-func (c *Client) Autocomplete(ctx context.Context, text string, params *GeocodeQuery) (*GeoJSONFeatureCollection, error) {
+// func (c *Client) Autocomplete(ctx context.Context, text string, params *GeocodeQuery) (*GeoJSONFeatureCollection, error) {
+// 	if params == nil {
+// 		params = &GeocodeQuery{}
+// 	}
+// 	params.Text = text
+// 	endpoint := "/geocoding/v2/autocomplete"
+
+// 	reqURL, err := c.buildURL(endpoint, params)
+// 	if err != nil {
+// 		return nil, errors.Wrap(err, "build autocomplete URL")
+// 	}
+
+// 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+// 	if err != nil {
+// 		return nil, errors.Wrap(err, "create autocomplete request")
+// 	}
+
+// 	var result GeoJSONFeatureCollection
+// 	if err := c.do(req, &result); err != nil {
+// 		return nil, errors.Wrap(err, "execute autocomplete request")
+// 	}
+// 	return &result, nil
+// }
+
+func (c *Client) Autocomplete(ctx context.Context, text string, params *GeocodeQuery) ([]AutocompleteSuggestion, error) {
 	if params == nil {
 		params = &GeocodeQuery{}
 	}
@@ -155,17 +265,53 @@ func (c *Client) Autocomplete(ctx context.Context, text string, params *GeocodeQ
 	if err := c.do(req, &result); err != nil {
 		return nil, errors.Wrap(err, "execute autocomplete request")
 	}
-	return &result, nil
+
+	var suggestions []AutocompleteSuggestion
+	for _, feature := range result.Features {
+		suggestion := AutocompleteSuggestion{
+			GID:            feature.Properties["gid"].(string),
+			Name:           feature.Properties["name"].(string),
+			CoarseLocation: feature.Properties["coarse_location"].(string),
+			Layer:          feature.Properties["layer"].(string),
+		}
+		suggestions = append(suggestions, suggestion)
+	}
+
+	return suggestions, nil
 }
 
-// ...existing code...
 // PlaceDetail fetches detailed place information using v2 API.
 // Endpoint: /geocoding/v2/place_detail
-func (c *Client) PlaceDetail(ctx context.Context, gid string) (*PlaceDetailResponse, error) {
-	endpoint := "/geocoding/v2/place_detail" // Correct endpoint is used here
+// func (c *Client) PlaceDetail(ctx context.Context, gid string) (*PlaceDetailResponse, error) {
+// 	endpoint := "/geocoding/v2/place_details" // Correct endpoint with 's'
+// 	queryParams := struct {
+// 		IDs string `url:"ids"` // Fixed: changed to url:"ids"
+// 	}{IDs: gid}
+
+// 	log.Println(queryParams)
+
+// 	reqURL, err := c.buildURL(endpoint, queryParams)
+// 	if err != nil {
+// 		return nil, errors.Wrap(err, "build place detail URL")
+// 	}
+
+// 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+// 	if err != nil {
+// 		return nil, errors.Wrap(err, "create place detail request")
+// 	}
+
+// 	var result PlaceDetailResponse
+// 	if err := c.do(req, &result); err != nil {
+// 		return nil, errors.Wrap(err, "execute place detail request")
+// 	}
+// 	return &result, nil
+// }
+
+func (c *Client) PlaceDetail(ctx context.Context, gid string) (*PlaceDetails, error) {
+	endpoint := "/geocoding/v2/place_details"
 	queryParams := struct {
-		GID string `url:"gid"`
-	}{GID: gid}
+		IDs string `url:"ids"`
+	}{IDs: gid}
 
 	reqURL, err := c.buildURL(endpoint, queryParams)
 	if err != nil {
@@ -177,14 +323,38 @@ func (c *Client) PlaceDetail(ctx context.Context, gid string) (*PlaceDetailRespo
 		return nil, errors.Wrap(err, "create place detail request")
 	}
 
-	var result PlaceDetailResponse
+	var result GeocodingResponse
 	if err := c.do(req, &result); err != nil {
 		return nil, errors.Wrap(err, "execute place detail request")
 	}
-	return &result, nil
-}
 
-// ...existing code...
+	if len(result.Features) == 0 {
+		return nil, errors.New("no place details found")
+	}
+
+	feature := result.Features[0]
+	props := feature.Properties
+
+	details := &PlaceDetails{
+		Name:      props.Name, // Direct access (no type assertion)
+		Address:   props.FormattedAddressLine,
+		Latitude:  feature.Geometry.Coordinates[1],
+		Longitude: feature.Geometry.Coordinates[0],
+	}
+
+	// Safely extract OSM addendum data (if exists)
+	if osm := props.Addendum.OSM; osm != (struct {
+		OpeningHours string `json:"opening_hours,omitempty"`
+		Phone        string `json:"phone,omitempty"`
+		Website      string `json:"website,omitempty"`
+	}{}) {
+		details.Phone = osm.Phone
+		details.Website = osm.Website
+		details.Hours = osm.OpeningHours
+	}
+
+	return details, nil
+}
 
 // ReverseGeocode performs reverse geocoding using v1 API.
 // Endpoint: /geocoding/v1/reverse
