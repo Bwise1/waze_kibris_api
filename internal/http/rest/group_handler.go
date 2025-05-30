@@ -25,7 +25,7 @@ func (api *API) GroupRoutes() chi.Router {
 		r.Method(http.MethodGet, "/", Handler(api.SearchForListOfGroupsHandler))
 		// Get details of a specific group
 		// Response: Full group details (incl. member count, maybe recent messages preview)
-		r.Method(http.MethodGet, "/{groupID}", Handler(api.placeHolderHandler))
+		r.Method(http.MethodGet, "/{groupID}", Handler(api.GetGroupByIDHandler))
 		// Update group details (Name, Description, Icon, Privacy) - Requires Admin role
 		// Request Body: { "name": "...", "description": "...", "is_private": bool, "icon_url": "..." }
 		// Response: Updated group details
@@ -181,4 +181,9 @@ func (api *API) JoinGroupByShortCodeHandler(w http.ResponseWriter, r *http.Reque
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("Joined group successfully"))
 	}
+}
+
+func (api *API) GetGroupByIDHandler(w http.ResponseWriter, r *http.Request) *ServerResponse {
+
+	return &ServerResponse{}
 }

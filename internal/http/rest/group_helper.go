@@ -6,6 +6,7 @@ import (
 	"github.com/bwise1/waze_kibris/internal/model"
 	"github.com/bwise1/waze_kibris/util"
 	"github.com/bwise1/waze_kibris/util/values"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
@@ -37,4 +38,9 @@ func (api *API) SearchCommunityGroupsHelper(ctx context.Context) ([]model.Commun
 	}
 
 	return groups, values.Success, "Groups returned successfully", nil
+}
+
+func (api *API) GetCommunityGroupByIDHelper(ctx context.Context, groupID uuid.UUID) (string, string, error) {
+
+	return "", "", nil
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/bwise1/waze_kibris/internal/db"
 	deps "github.com/bwise1/waze_kibris/internal/debs"
 	api "github.com/bwise1/waze_kibris/internal/http/rest"
+	stadiamaps "github.com/bwise1/waze_kibris/internal/http/stadia_maps"
 	"github.com/bwise1/waze_kibris/internal/http/valhalla"
 	smtp "github.com/bwise1/waze_kibris/util/email"
 )
@@ -31,12 +32,16 @@ func main() {
 	}
 	valhallaClient := valhalla.NewValhallaClient(cfg.ValhallaURL)
 	log.Printf("Valhalla client initialized with BaseURL: %s", cfg.ValhallaURL)
+
+	stadiaClient := stadiamaps.NewClient(cfg.StadiaMapsAPIKey)
+	log.Printf("stadia clkient initialized")
 	a := &api.API{
 		Config:         cfg,
 		Deps:           deps,
 		Mailer:         mailer,
 		DB:             database.Pool(),
 		ValhallaClient: valhallaClient,
+		StadiaClient:   stadiaClient,
 	}
 	a.Init()
 	go deps.WebSocket.Run()

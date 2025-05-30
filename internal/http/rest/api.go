@@ -9,6 +9,7 @@ import (
 
 	"github.com/bwise1/waze_kibris/config"
 	deps "github.com/bwise1/waze_kibris/internal/debs"
+	stadiamaps "github.com/bwise1/waze_kibris/internal/http/stadia_maps"
 	"github.com/bwise1/waze_kibris/internal/http/valhalla"
 	smtp "github.com/bwise1/waze_kibris/util/email"
 	"github.com/bwise1/waze_kibris/util/values"
@@ -42,6 +43,7 @@ type API struct {
 	Mailer         *smtp.Mailer
 	DB             *pgxpool.Pool
 	ValhallaClient *valhalla.ValhallaClient
+	StadiaClient   *stadiamaps.Client
 }
 
 func (api *API) Serve() error {
@@ -71,6 +73,7 @@ func (api *API) setUpServerHandler() http.Handler {
 	mux.Mount("/user", api.UserRoutes())
 	mux.Mount("/route", api.RoutingRoutes())
 	mux.Mount("/community", api.GroupRoutes())
+	mux.Mount("/places", api.PlacesRoutes())
 
 	//websocket
 	mux.HandleFunc("/ws", api.Deps.WebSocket.HandleConnections)

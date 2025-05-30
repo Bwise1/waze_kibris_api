@@ -27,6 +27,7 @@ type Config struct {
 	GoogleClientSecret  string `env:"GOOGLE_CLIENT_SECRET"`
 	GoogleRedirectURL   string `env:"GOOGLE_REDIRECT_URL"`
 	ValhallaURL         string `env:"VALHALLA_URL"`
+	StadiaMapsAPIKey    string `env:"STADIA_MAPS_API_KEY"`
 }
 
 func New() *Config {
