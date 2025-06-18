@@ -86,27 +86,27 @@ type AlternateTrip struct {
 	Trip Trip `json:"trip"`
 }
 
-type RouteResponse struct {
-	Trip       Trip            `json:"trip"`
-	Alternates []AlternateTrip `json:"alternates,omitempty"` // Include alternates directly if API provides them at top level
-	ID         *string         `json:"id,omitempty"`         // Echoes request ID if provided
-	// Note: Sometimes alternatives are nested within the 'trip' itself. Adjust if needed based on actual Valhalla output.
-	// If alternatives are nested inside trip:
-	// Trip struct { ... Alternates []Trip `json:"alternates,omitempty"` }
-}
+// type RouteResponse struct {
+// 	Trip       Trip            `json:"trip"`
+// 	Alternates []AlternateTrip `json:"alternates,omitempty"` // Include alternates directly if API provides them at top level
+// 	ID         *string         `json:"id,omitempty"`         // Echoes request ID if provided
+// 	// Note: Sometimes alternatives are nested within the 'trip' itself. Adjust if needed based on actual Valhalla output.
+// 	// If alternatives are nested inside trip:
+// 	// Trip struct { ... Alternates []Trip `json:"alternates,omitempty"` }
+// }
 
 // Trip represents a single route (either primary or an alternative)
-type Trip struct {
-	Locations     []TripLocation `json:"locations"`
-	Legs          []Leg          `json:"legs"`
-	Summary       Summary        `json:"summary"`
-	Status        int            `json:"status,omitempty"`
-	StatusMessage string         `json:"status_message,omitempty"`
-	Units         string         `json:"units,omitempty"`
-	Language      string         `json:"language,omitempty"`
-	// If alternatives are nested inside the main trip object:
-	// Alternates []Trip `json:"alternates,omitempty"`
-}
+// type Trip struct {
+// 	Locations     []TripLocation `json:"locations"`
+// 	Legs          []Leg          `json:"legs"`
+// 	Summary       Summary        `json:"summary"`
+// 	Status        int            `json:"status,omitempty"`
+// 	StatusMessage string         `json:"status_message,omitempty"`
+// 	Units         string         `json:"units,omitempty"`
+// 	Language      string         `json:"language,omitempty"`
+// 	// If alternatives are nested inside the main trip object:
+// 	// Alternates []Trip `json:"alternates,omitempty"`
+// }
 
 // TripLocation represents a location snapped to the graph in the response
 type TripLocation struct {
@@ -139,33 +139,33 @@ type Summary struct {
 	HasCountryCross    bool    `json:"has_country_cross,omitempty"`
 }
 
-// Leg represents a segment of the trip between two break locations
-type Leg struct {
-	Shape     string     `json:"shape"` // Encoded polyline
-	Summary   Summary    `json:"summary"`
-	Maneuvers []Maneuver `json:"maneuvers"`
-}
+// // Leg represents a segment of the trip between two break locations
+// type Leg struct {
+// 	Shape     string     `json:"shape"` // Encoded polyline
+// 	Summary   Summary    `json:"summary"`
+// 	Maneuvers []Maneuver `json:"maneuvers"`
+// }
 
-// Maneuver represents a single turn-by-turn instruction
-type Maneuver struct {
-	Type                             int      `json:"type"`
-	Instruction                      string   `json:"instruction"`
-	VerbalTransitionAlertInstruction string   `json:"verbal_transition_alert_instruction,omitempty"`
-	VerbalPreTransitionInstruction   string   `json:"verbal_pre_transition_instruction,omitempty"`
-	VerbalPostTransitionInstruction  string   `json:"verbal_post_transition_instruction,omitempty"`
-	StreetNames                      []string `json:"street_names,omitempty"`
-	BeginStreetNames                 []string `json:"begin_street_names,omitempty"`
-	Time                             float64  `json:"time"`   // Seconds for this maneuver
-	Length                           float64  `json:"length"` // Distance for this maneuver (in specified units)
-	BeginShapeIndex                  int      `json:"begin_shape_index"`
-	EndShapeIndex                    int      `json:"end_shape_index"`
-	TravelMode                       string   `json:"travel_mode"`           // e.g., "drive", "walk"
-	TravelType                       string   `json:"travel_type,omitempty"` // e.g., "car", "foot"
-	RoundaboutExitCount              int      `json:"roundabout_exit_count,omitempty"`
-	DepartInstruction                string   `json:"depart_instruction,omitempty"`
-	ArriveInstruction                string   `json:"arrive_instruction,omitempty"`
-	// Add other fields like sign elements if needed
-}
+// // Maneuver represents a single turn-by-turn instruction
+// type Maneuver struct {
+// 	Type                             int      `json:"type"`
+// 	Instruction                      string   `json:"instruction"`
+// 	VerbalTransitionAlertInstruction string   `json:"verbal_transition_alert_instruction,omitempty"`
+// 	VerbalPreTransitionInstruction   string   `json:"verbal_pre_transition_instruction,omitempty"`
+// 	VerbalPostTransitionInstruction  string   `json:"verbal_post_transition_instruction,omitempty"`
+// 	StreetNames                      []string `json:"street_names,omitempty"`
+// 	BeginStreetNames                 []string `json:"begin_street_names,omitempty"`
+// 	Time                             float64  `json:"time"`   // Seconds for this maneuver
+// 	Length                           float64  `json:"length"` // Distance for this maneuver (in specified units)
+// 	BeginShapeIndex                  int      `json:"begin_shape_index"`
+// 	EndShapeIndex                    int      `json:"end_shape_index"`
+// 	TravelMode                       string   `json:"travel_mode"`           // e.g., "drive", "walk"
+// 	TravelType                       string   `json:"travel_type,omitempty"` // e.g., "car", "foot"
+// 	RoundaboutExitCount              int      `json:"roundabout_exit_count,omitempty"`
+// 	DepartInstruction                string   `json:"depart_instruction,omitempty"`
+// 	ArriveInstruction                string   `json:"arrive_instruction,omitempty"`
+// 	// Add other fields like sign elements if needed
+// }
 
 // --- Mobile-Friendly Formatted Structures ---
 

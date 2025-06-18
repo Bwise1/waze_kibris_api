@@ -1,7 +1,7 @@
 package stadiamaps
 
 import (
-	"bytes"
+	// "bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -392,75 +392,75 @@ type RouteLocation struct {
 	Type *string `json:"type,omitempty"` // "break", "through", "via"
 }
 
-// RouteRequest is the payload for the /route endpoint.
-type RouteRequest struct {
-	Locations      []RouteLocation `json:"locations"`
-	Costing        string          `json:"costing"`                   // e.g., "auto", "pedestrian"
-	Units          *string         `json:"units,omitempty"`           // "km" or "mi"
-	Language       *string         `json:"language,omitempty"`        // e.g., "en-US"
-	DirectionsType *string         `json:"directions_type,omitempty"` // "instructions" or "none"
-}
+// // RouteRequest is the payload for the /route endpoint.
+// type RouteRequest struct {
+// 	Locations      []RouteLocation `json:"locations"`
+// 	Costing        string          `json:"costing"`                   // e.g., "auto", "pedestrian"
+// 	Units          *string         `json:"units,omitempty"`           // "km" or "mi"
+// 	Language       *string         `json:"language,omitempty"`        // e.g., "en-US"
+// 	DirectionsType *string         `json:"directions_type,omitempty"` // "instructions" or "none"
+// }
 
-// Maneuver represents a turn-by-turn instruction.
-type Maneuver struct {
-	Instruction string   `json:"instruction"`
-	StreetNames []string `json:"street_names,omitempty"`
-	Time        float64  `json:"time"`
-	Length      float64  `json:"length"` // In units specified
-}
+// // Maneuver represents a turn-by-turn instruction.
+// type Maneuver struct {
+// 	Instruction string   `json:"instruction"`
+// 	StreetNames []string `json:"street_names,omitempty"`
+// 	Time        float64  `json:"time"`
+// 	Length      float64  `json:"length"` // In units specified
+// }
 
-// RouteLeg represents a segment of the trip.
-type RouteLeg struct {
-	Maneuvers []Maneuver `json:"maneuvers"`
-	Summary   struct {
-		Time   float64 `json:"time"`
-		Length float64 `json:"length"`
-	} `json:"summary"`
-	Shape string `json:"shape"` // Polyline6 encoded
-}
+// // RouteLeg represents a segment of the trip.
+// type RouteLeg struct {
+// 	Maneuvers []Maneuver `json:"maneuvers"`
+// 	Summary   struct {
+// 		Time   float64 `json:"time"`
+// 		Length float64 `json:"length"`
+// 	} `json:"summary"`
+// 	Shape string `json:"shape"` // Polyline6 encoded
+// }
 
-// RouteResponse is the response from the /route endpoint.
-type RouteResponse struct {
-	Trip RouteTrip `json:"trip"`
-}
+// // RouteResponse is the response from the /route endpoint.
+// type RouteResponse struct {
+// 	Trip RouteTrip `json:"trip"`
+// }
 
-// RouteTrip represents a single route.
-type RouteTrip struct {
-	Legs    []RouteLeg `json:"legs"`
-	Summary struct {
-		Time   float64 `json:"time"`
-		Length float64 `json:"length"`
-	} `json:"summary"`
-	Shape string `json:"shape"` // Polyline6-encoded shape
-}
+// // RouteTrip represents a single route.
+// type RouteTrip struct {
+// 	Legs    []RouteLeg `json:"legs"`
+// 	Summary struct {
+// 		Time   float64 `json:"time"`
+// 		Length float64 `json:"length"`
+// 	} `json:"summary"`
+// 	Shape string `json:"shape"` // Polyline6-encoded shape
+// }
 
-// GetRoute fetches a route using Valhalla.
-// Endpoint: /route/v1
-func (c *Client) GetRoute(ctx context.Context, routeReq RouteRequest) (*RouteResponse, error) {
-	endpoint := "/route/v1"
+// // GetRoute fetches a route using Valhalla.
+// // Endpoint: /route/v1
+// func (c *Client) GetRoute(ctx context.Context, routeReq RouteRequest) (*RouteResponse, error) {
+// 	endpoint := "/route/v1"
 
-	bodyBytes, err := json.Marshal(routeReq)
-	if err != nil {
-		return nil, errors.Wrap(err, "marshal route request")
-	}
+// 	bodyBytes, err := json.Marshal(routeReq)
+// 	if err != nil {
+// 		return nil, errors.Wrap(err, "marshal route request")
+// 	}
 
-	reqURL, err := c.buildURL(endpoint, nil)
-	if err != nil {
-		return nil, errors.Wrap(err, "build route URL")
-	}
+// 	reqURL, err := c.buildURL(endpoint, nil)
+// 	if err != nil {
+// 		return nil, errors.Wrap(err, "build route URL")
+// 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL, bytes.NewBuffer(bodyBytes))
-	if err != nil {
-		return nil, errors.Wrap(err, "create route request")
-	}
-	req.Header.Set("Content-Type", "application/json")
+// 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL, bytes.NewBuffer(bodyBytes))
+// 	if err != nil {
+// 		return nil, errors.Wrap(err, "create route request")
+// 	}
+// 	req.Header.Set("Content-Type", "application/json")
 
-	var result RouteResponse
-	if err := c.do(req, &result); err != nil {
-		return nil, errors.Wrap(err, "execute route request")
-	}
-	return &result, nil
-}
+// 	var result RouteResponse
+// 	if err := c.do(req, &result); err != nil {
+// 		return nil, errors.Wrap(err, "execute route request")
+// 	}
+// 	return &result, nil
+// }
 
 // do executes HTTP requests and decodes JSON responses.
 func (c *Client) do(req *http.Request, v interface{}) error {
