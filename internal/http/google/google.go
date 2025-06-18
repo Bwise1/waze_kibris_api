@@ -216,3 +216,282 @@ func (gc *GoogleMapsClient) GetPlaceDetails(ctx context.Context, placeID string,
 
 	return &detailsResponse.Result, nil
 }
+
+// ...existing code...
+
+// --- Place Autocomplete Structures ---
+type AutocompleteResponse struct {
+	Predictions []AutocompletePrediction `json:"predictions"`
+	Status      string                   `json:"status"`
+}
+
+type AutocompletePrediction struct {
+	Description string   `json:"description"`
+	PlaceID     string   `json:"place_id"`
+	Types       []string `json:"types"`
+}
+
+// PlaceAutocomplete provides suggestions as the user types.
+func (gc *GoogleMapsClient) PlaceAutocomplete(ctx context.Context, input string, location *LatLng, radius int) (*AutocompleteResponse, error) {
+	if gc.APIKey == "" {
+		return nil, fmt.Errorf("google maps API key is not set")
+	}
+	if input == "" {
+		return nil, fmt.Errorf("input cannot be empty")
+	}
+
+	baseURL := "https://maps.googleapis.com/maps/api/place/autocomplete/json"
+	params := url.Values{}
+	params.Set("input", input)
+	params.Set("key", gc.APIKey)
+	if location != nil {
+		params.Set("location", fmt.Sprintf("%f,%f", location.Lat, location.Lng))
+	}
+	if radius > 0 {
+		params.Set("radius", fmt.Sprintf("%d", radius))
+	}
+
+	fullURL := fmt.Sprintf("%s?%s", baseURL, params.Encode())
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fullURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Place Autocomplete request: %w", err)
+	}
+
+	resp, err := gc.Client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute Place Autocomplete request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read Place Autocomplete response body: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("google maps error: status code %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var autoResp AutocompleteResponse
+	err = json.Unmarshal(bodyBytes, &autoResp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode Place Autocomplete response: %w", err)
+	}
+	if autoResp.Status != "OK" {
+		return nil, fmt.Errorf("google maps API error: %s", autoResp.Status)
+	}
+	return &autoResp, nil
+}
+
+// --- Place Search Structures ---
+type PlaceSearchResponse struct {
+	Results []PlaceDetailsResult `json:"results"`
+	Status  string               `json:"status"`
+}
+
+// PlaceSearch (Text Search) finds places by query.
+func (gc *GoogleMapsClient) PlaceSearch(ctx context.Context, query string, location *LatLng, radius int) (*PlaceSearchResponse, error) {
+	if gc.APIKey == "" {
+		return nil, fmt.Errorf("google maps API key is not set")
+	}
+	if query == "" {
+		return nil, fmt.Errorf("query cannot be empty")
+	}
+
+	baseURL := "https://maps.googleapis.com/maps/api/place/textsearch/json"
+	params := url.Values{}
+	params.Set("query", query)
+	params.Set("key", gc.APIKey)
+	if location != nil {
+		params.Set("location", fmt.Sprintf("%f,%f", location.Lat, location.Lng))
+	}
+	if radius > 0 {
+		params.Set("radius", fmt.Sprintf("%d", radius))
+	}
+
+	fullURL := fmt.Sprintf("%s?%s", baseURL, params.Encode())
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fullURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Place Search request: %w", err)
+	}
+
+	resp, err := gc.Client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute Place Search request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read Place Search response body: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("google maps error: status code %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var searchResp PlaceSearchResponse
+	err = json.Unmarshal(bodyBytes, &searchResp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode Place Search response: %w", err)
+	}
+	if searchResp.Status != "OK" {
+		return nil, fmt.Errorf("google maps API error: %s", searchResp.Status)
+	}
+	return &searchResp, nil
+}
+
+// --- Directions Structures ---
+type DirectionsResponse struct {
+	Routes []Route `json:"routes"`
+	Status string  `json:"status"`
+}
+
+type Route struct {
+	Summary          string   `json:"summary"`
+	Legs             []Leg    `json:"legs"`
+	OverviewPolyline Polyline `json:"overview_polyline"`
+}
+
+type Leg struct {
+	Distance      TextValue `json:"distance"`
+	Duration      TextValue `json:"duration"`
+	StartAddress  string    `json:"start_address"`
+	EndAddress    string    `json:"end_address"`
+	StartLocation LatLng    `json:"start_location"`
+	EndLocation   LatLng    `json:"end_location"`
+	Steps         []Step    `json:"steps"`
+}
+
+type Step struct {
+	Distance   TextValue `json:"distance"`
+	Duration   TextValue `json:"duration"`
+	HtmlInstr  string    `json:"html_instructions"`
+	Polyline   Polyline  `json:"polyline"`
+	StartLoc   LatLng    `json:"start_location"`
+	EndLoc     LatLng    `json:"end_location"`
+	TravelMode string    `json:"travel_mode"`
+}
+
+type Polyline struct {
+	Points string `json:"points"`
+}
+
+type TextValue struct {
+	Text  string `json:"text"`
+	Value int    `json:"value"`
+}
+
+// Directions fetches directions between two points.
+func (gc *GoogleMapsClient) Directions(ctx context.Context, origin, destination string, waypoints []string, mode string, alternatives bool) (*DirectionsResponse, error) {
+	if gc.APIKey == "" {
+		return nil, fmt.Errorf("google maps API key is not set")
+	}
+	if origin == "" || destination == "" {
+		return nil, fmt.Errorf("origin and destination cannot be empty")
+	}
+
+	baseURL := "https://maps.googleapis.com/maps/api/directions/json"
+	params := url.Values{}
+	params.Set("origin", origin)
+	params.Set("destination", destination)
+	params.Set("key", gc.APIKey)
+	if len(waypoints) > 0 {
+		params.Set("waypoints", strings.Join(waypoints, "|"))
+	}
+	if mode != "" {
+		params.Set("mode", mode)
+	}
+	if alternatives {
+		params.Set("alternatives", "true")
+	}
+
+	fullURL := fmt.Sprintf("%s?%s", baseURL, params.Encode())
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fullURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Directions request: %w", err)
+	}
+
+	resp, err := gc.Client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute Directions request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read Directions response body: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("google maps error: status code %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var dirResp DirectionsResponse
+	err = json.Unmarshal(bodyBytes, &dirResp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode Directions response: %w", err)
+	}
+	if dirResp.Status != "OK" {
+		return nil, fmt.Errorf("google maps API error: %s", dirResp.Status)
+	}
+	return &dirResp, nil
+}
+
+// --- Reverse Geocoding Structures ---
+type GeocodeResponse struct {
+	Results []GeocodeResult `json:"results"`
+	Status  string          `json:"status"`
+}
+
+type GeocodeResult struct {
+	FormattedAddress string   `json:"formatted_address"`
+	Geometry         Geometry `json:"geometry"`
+	PlaceID          string   `json:"place_id"`
+	Types            []string `json:"types"`
+}
+
+// ReverseGeocode converts coordinates to an address.
+func (gc *GoogleMapsClient) ReverseGeocode(ctx context.Context, lat, lng float64) (*GeocodeResponse, error) {
+	if gc.APIKey == "" {
+		return nil, fmt.Errorf("google maps API key is not set")
+	}
+
+	baseURL := "https://maps.googleapis.com/maps/api/geocode/json"
+	params := url.Values{}
+	params.Set("latlng", fmt.Sprintf("%f,%f", lat, lng))
+	params.Set("key", gc.APIKey)
+
+	fullURL := fmt.Sprintf("%s?%s", baseURL, params.Encode())
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fullURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Reverse Geocode request: %w", err)
+	}
+
+	resp, err := gc.Client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute Reverse Geocode request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read Reverse Geocode response body: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("google maps error: status code %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var geoResp GeocodeResponse
+	err = json.Unmarshal(bodyBytes, &geoResp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode Reverse Geocode response: %w", err)
+	}
+	if geoResp.Status != "OK" {
+		return nil, fmt.Errorf("google maps API error: %s", geoResp.Status)
+	}
+	return &geoResp, nil
+}
+
+// ...existing code...

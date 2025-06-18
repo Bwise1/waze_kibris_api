@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	googlemaps "github.com/bwise1/waze_kibris/internal/http/google"
 	stadiamaps "github.com/bwise1/waze_kibris/internal/http/stadia_maps" // Import stadia_maps
 	"github.com/bwise1/waze_kibris/util"
 	"github.com/bwise1/waze_kibris/util/tracing"
@@ -32,7 +33,12 @@ func (api *API) PlacesRoutes() chi.Router {
 		// Query Params: ?text=...&size=...&focus.point.lat=...&focus.point.lon=... (optional focus)
 		r.Method(http.MethodGet, "/autocomplete", Handler(api.AutocompletePlaceHandler))
 
-		r.Method(http.MethodGet, "/placedetails", Handler(api.PlaceDetailHandler))
+		// r.Method(http.MethodGet, "/placedetails", Handler(api.PlaceDetailHandler))
+		r.Method(http.MethodGet, "/googleplacedetails", Handler(api.GooglePlaceDetailHandler))
+
+		r.Method(http.MethodGet, "/googleautocomplete", Handler(api.GoogleAutocompleteHandler))
+
+		r.Method(http.MethodGet, "/googledirections", Handler(api.GoogleDirectionsHandler))
 	})
 	return mux
 }
@@ -252,4 +258,103 @@ func (api *API) PlaceDetailHandler(_ http.ResponseWriter, r *http.Request) *Serv
 	}
 }
 
-// ... (rest of places_handler.go)
+func (api *API) GooglePlaceDetailHandler(_ http.ResponseWriter, r *http.Request) *ServerResponse {
+	tc, ok := r.Context().Value(values.ContextTracingKey).(tracing.Context)
+	if !ok {
+		log.Println("Warning: Missing tracing context in GooglePlaceDetailHandler")
+	}
+	queryParams := r.URL.Query()
+	placeID := strings.TrimSpace(queryParams.Get("place_id"))
+
+	if placeID == "" {
+		return respondWithError(nil, "Missing 'place_id' query parameter", values.BadRequestBody, &tc)
+	}
+
+	// Specify the fields you want from Google
+	fields := []string{
+		"name", "formatted_address", "geometry", "rating", "opening_hours", "photos", "reviews", "place_id",
+	}
+
+	placeData, err := api.GoogleMapsClient.GetPlaceDetails(r.Context(), placeID, fields)
+	if err != nil {
+		log.Printf("Error fetching place details from Google for PlaceID %s: %v", placeID, err)
+		return respondWithError(err, "Failed to fetch place details", values.SystemErr, &tc)
+	}
+
+	if placeData == nil {
+		log.Printf("No data returned for PlaceID %s from Google Place Details.", placeID)
+		return respondWithError(nil, "No place details found", values.NotFound, &tc)
+	}
+
+	return &ServerResponse{
+		Message:    "Place details fetched successfully (Google)",
+		Status:     values.Success,
+		StatusCode: util.StatusCode(values.Success),
+		Data:       placeData,
+	}
+}
+
+// GoogleAutocompleteHandler provides autocomplete suggestions using Google Places API.
+// Query Params: ?text=...&focus.point.lat=...&focus.point.lon=...&radius=...
+func (api *API) GoogleAutocompleteHandler(_ http.ResponseWriter, r *http.Request) *ServerResponse {
+	tc := r.Context().Value(values.ContextTracingKey).(tracing.Context)
+	queryParams := r.URL.Query()
+	text := queryParams.Get("text")
+
+	if text == "" {
+		return respondWithError(nil, "Missing 'text' query parameter for autocomplete", values.BadRequestBody, &tc)
+	}
+
+	// Optional: parse focus point and radius
+	var location *googlemaps.LatLng
+	if latStr, lonStr := queryParams.Get("focus.point.lat"), queryParams.Get("focus.point.lon"); latStr != "" && lonStr != "" {
+		lat, err1 := strconv.ParseFloat(latStr, 64)
+		lon, err2 := strconv.ParseFloat(lonStr, 64)
+		if err1 == nil && err2 == nil {
+			location = &googlemaps.LatLng{Lat: lat, Lng: lon}
+		}
+	}
+	radius := 0
+	if radiusStr := queryParams.Get("radius"); radiusStr != "" {
+		if r, err := strconv.Atoi(radiusStr); err == nil {
+			radius = r
+		}
+	}
+
+	results, err := api.GoogleMapsClient.PlaceAutocomplete(r.Context(), text, location, radius)
+	if err != nil {
+		log.Printf("Error autocompleting place with Google: %v", err)
+		return respondWithError(err, "Failed to autocomplete place (Google)", values.Error, &tc)
+	}
+
+	return &ServerResponse{
+		Message:    "Autocomplete successful (Google)",
+		Status:     values.Success,
+		StatusCode: util.StatusCode(values.Success),
+		Data:       results,
+	}
+}
+
+func (api *API) GoogleDirectionsHandler(_ http.ResponseWriter, r *http.Request) *ServerResponse {
+	tc := r.Context().Value(values.ContextTracingKey).(tracing.Context)
+	q := r.URL.Query()
+	origin := q.Get("origin")
+	destination := q.Get("destination")
+	mode := q.Get("mode")
+	waypoints := q["waypoint"] // e.g. ?waypoint=Benin&waypoint=Ibadan
+
+	if origin == "" || destination == "" {
+		return respondWithError(nil, "Missing 'origin' or 'destination'", values.BadRequestBody, &tc)
+	}
+
+	result, err := api.GoogleMapsClient.Directions(r.Context(), origin, destination, waypoints, mode, true)
+	if err != nil {
+		return respondWithError(err, "Failed to get directions", values.SystemErr, &tc)
+	}
+	return &ServerResponse{
+		Message:    "Directions fetched successfully",
+		Status:     values.Success,
+		StatusCode: util.StatusCode(values.Success),
+		Data:       result,
+	}
+}

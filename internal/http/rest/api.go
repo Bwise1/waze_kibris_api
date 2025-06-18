@@ -9,6 +9,7 @@ import (
 
 	"github.com/bwise1/waze_kibris/config"
 	deps "github.com/bwise1/waze_kibris/internal/debs"
+	googlemaps "github.com/bwise1/waze_kibris/internal/http/google"
 	stadiamaps "github.com/bwise1/waze_kibris/internal/http/stadia_maps"
 	"github.com/bwise1/waze_kibris/internal/http/valhalla"
 	smtp "github.com/bwise1/waze_kibris/util/email"
@@ -37,13 +38,14 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 type API struct {
-	Server         *http.Server
-	Config         *config.Config
-	Deps           *deps.Dependencies
-	Mailer         *smtp.Mailer
-	DB             *pgxpool.Pool
-	ValhallaClient *valhalla.ValhallaClient
-	StadiaClient   *stadiamaps.Client
+	Server           *http.Server
+	Config           *config.Config
+	Deps             *deps.Dependencies
+	Mailer           *smtp.Mailer
+	DB               *pgxpool.Pool
+	ValhallaClient   *valhalla.ValhallaClient
+	StadiaClient     *stadiamaps.Client
+	GoogleMapsClient *googlemaps.GoogleMapsClient
 }
 
 func (api *API) Serve() error {
