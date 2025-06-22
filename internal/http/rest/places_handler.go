@@ -302,18 +302,31 @@ func (api *API) GoogleAutocompleteHandler(_ http.ResponseWriter, r *http.Request
 	text := queryParams.Get("text")
 
 	if text == "" {
-		return respondWithError(nil, "Missing 'text' query parameter for autocomplete", values.BadRequestBody, &tc)
+		return respondWithError(nil, "Missing 'text' query parameter", values.BadRequestBody, &tc)
 	}
 
-	// Optional: parse focus point and radius
-	var location *googlemaps.LatLng
-	if latStr, lonStr := queryParams.Get("focus.point.lat"), queryParams.Get("focus.point.lon"); latStr != "" && lonStr != "" {
+	// --- MODIFIED SECTION START ---
+
+	// Parse origin coordinates from "lat" and "lon" query parameters.
+	var origin *googlemaps.LatLng
+	latStr := queryParams.Get("lat")
+	lonStr := queryParams.Get("lon")
+
+	if latStr != "" && lonStr != "" {
 		lat, err1 := strconv.ParseFloat(latStr, 64)
 		lon, err2 := strconv.ParseFloat(lonStr, 64)
 		if err1 == nil && err2 == nil {
-			location = &googlemaps.LatLng{Lat: lat, Lng: lon}
+			origin = &googlemaps.LatLng{Lat: lat, Lng: lon}
+		} else {
+			// Optional: return an error for invalid coordinates
+			log.Printf("Invalid latitude/longitude format: lat=%s, lon=%s", latStr, lonStr)
+			return respondWithError(nil, "Invalid 'lat' or 'lon' query parameter format", values.BadRequestBody, &tc)
 		}
 	}
+
+	// --- MODIFIED SECTION END ---
+
+	// Optional: parse radius
 	radius := 0
 	if radiusStr := queryParams.Get("radius"); radiusStr != "" {
 		if r, err := strconv.Atoi(radiusStr); err == nil {
@@ -321,7 +334,8 @@ func (api *API) GoogleAutocompleteHandler(_ http.ResponseWriter, r *http.Request
 		}
 	}
 
-	results, err := api.GoogleMapsClient.PlaceAutocomplete(r.Context(), text, location, radius)
+	// Pass the parsed 'origin' to your client function.
+	results, err := api.GoogleMapsClient.PlaceAutocomplete(r.Context(), text, origin, radius)
 	if err != nil {
 		log.Printf("Error autocompleting place with Google: %v", err)
 		return respondWithError(err, "Failed to autocomplete place (Google)", values.Error, &tc)
@@ -334,7 +348,6 @@ func (api *API) GoogleAutocompleteHandler(_ http.ResponseWriter, r *http.Request
 		Data:       results,
 	}
 }
-
 func (api *API) GoogleDirectionsHandler(_ http.ResponseWriter, r *http.Request) *ServerResponse {
 	tc := r.Context().Value(values.ContextTracingKey).(tracing.Context)
 	q := r.URL.Query()

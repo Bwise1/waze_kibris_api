@@ -219,20 +219,104 @@ func (gc *GoogleMapsClient) GetPlaceDetails(ctx context.Context, placeID string,
 
 // ...existing code...
 
-// --- Place Autocomplete Structures ---
+// // --- Place Autocomplete Structures ---
+// type AutocompleteResponse struct {
+// 	Predictions []AutocompletePrediction `json:"predictions"`
+// 	Status      string                   `json:"status"`
+// }
+
+// type AutocompletePrediction struct {
+// 	Description string   `json:"description"`
+// 	PlaceID     string   `json:"place_id"`
+// 	Types       []string `json:"types"`
+// }
+
+// // PlaceAutocomplete provides suggestions as the user types.
+// func (gc *GoogleMapsClient) PlaceAutocomplete(ctx context.Context, input string, location *LatLng, radius int) (*AutocompleteResponse, error) {
+// 	if gc.APIKey == "" {
+// 		return nil, fmt.Errorf("google maps API key is not set")
+// 	}
+// 	if input == "" {
+// 		return nil, fmt.Errorf("input cannot be empty")
+// 	}
+
+// 	baseURL := "https://maps.googleapis.com/maps/api/place/autocomplete/json"
+// 	params := url.Values{}
+// 	params.Set("input", input)
+// 	params.Set("key", gc.APIKey)
+// 	if location != nil {
+// 		params.Set("location", fmt.Sprintf("%f,%f", location.Lat, location.Lng))
+// 	}
+// 	if radius > 0 {
+// 		params.Set("radius", fmt.Sprintf("%d", radius))
+// 	}
+
+// 	fullURL := fmt.Sprintf("%s?%s", baseURL, params.Encode())
+// 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fullURL, nil)
+// 	if err != nil {
+// 		return nil, fmt.Errorf("failed to create Place Autocomplete request: %w", err)
+// 	}
+
+// 	resp, err := gc.Client.Do(req)
+// 	if err != nil {
+// 		return nil, fmt.Errorf("failed to execute Place Autocomplete request: %w", err)
+// 	}
+// 	defer resp.Body.Close()
+
+// 	bodyBytes, err := io.ReadAll(resp.Body)
+// 	if err != nil {
+// 		return nil, fmt.Errorf("failed to read Place Autocomplete response body: %w", err)
+// 	}
+
+// 	if resp.StatusCode != http.StatusOK {
+// 		return nil, fmt.Errorf("google maps error: status code %d, body: %s", resp.StatusCode, string(bodyBytes))
+// 	}
+
+// 	var autoResp AutocompleteResponse
+// 	err = json.Unmarshal(bodyBytes, &autoResp)
+// 	if err != nil {
+// 		return nil, fmt.Errorf("failed to decode Place Autocomplete response: %w", err)
+// 	}
+// 	if autoResp.Status != "OK" {
+// 		return nil, fmt.Errorf("google maps API error: %s", autoResp.Status)
+// 	}
+// 	return &autoResp, nil
+// }
+
+// AutocompleteResponse is the top-level structure from the Google Places Autocomplete API.
 type AutocompleteResponse struct {
 	Predictions []AutocompletePrediction `json:"predictions"`
 	Status      string                   `json:"status"`
 }
 
+// AutocompletePrediction contains the information for a single place suggestion.
+// It has been updated to include distance and structured formatting.
 type AutocompletePrediction struct {
-	Description string   `json:"description"`
-	PlaceID     string   `json:"place_id"`
-	Types       []string `json:"types"`
+	Description          string               `json:"description"`
+	PlaceID              string               `json:"place_id"`
+	Types                []string             `json:"types"`
+	StructuredFormatting StructuredFormatting `json:"structured_formatting"`
+	Terms                []Term               `json:"terms"`
+	// DistanceMeters contains the straight-line distance in meters from the origin.
+	// This field is only returned if an "origin" is specified in the request.
+	DistanceMeters int `json:"distance_meters"`
+}
+
+// StructuredFormatting provides the main text and secondary text of a prediction,
+// useful for displaying the prediction in a structured way (e.g., name and address).
+type StructuredFormatting struct {
+	MainText      string `json:"main_text"`
+	SecondaryText string `json:"secondary_text"`
+}
+
+// Term represents a single term in the prediction's description.
+type Term struct {
+	Offset int    `json:"offset"`
+	Value  string `json:"value"`
 }
 
 // PlaceAutocomplete provides suggestions as the user types.
-func (gc *GoogleMapsClient) PlaceAutocomplete(ctx context.Context, input string, location *LatLng, radius int) (*AutocompleteResponse, error) {
+func (gc *GoogleMapsClient) PlaceAutocomplete(ctx context.Context, input string, origin *LatLng, radius int) (*AutocompleteResponse, error) {
 	if gc.APIKey == "" {
 		return nil, fmt.Errorf("google maps API key is not set")
 	}
@@ -244,9 +328,12 @@ func (gc *GoogleMapsClient) PlaceAutocomplete(ctx context.Context, input string,
 	params := url.Values{}
 	params.Set("input", input)
 	params.Set("key", gc.APIKey)
-	if location != nil {
-		params.Set("location", fmt.Sprintf("%f,%f", location.Lat, location.Lng))
+
+	// **MODIFIED**: Changed "location" to "origin" to get distance calculation.
+	if origin != nil {
+		params.Set("origin", fmt.Sprintf("%f,%f", origin.Lat, origin.Lng))
 	}
+
 	if radius > 0 {
 		params.Set("radius", fmt.Sprintf("%d", radius))
 	}
@@ -277,9 +364,12 @@ func (gc *GoogleMapsClient) PlaceAutocomplete(ctx context.Context, input string,
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode Place Autocomplete response: %w", err)
 	}
-	if autoResp.Status != "OK" {
+
+	// Check for API-level errors, like "ZERO_RESULTS" or "REQUEST_DENIED".
+	if autoResp.Status != "OK" && autoResp.Status != "ZERO_RESULTS" {
 		return nil, fmt.Errorf("google maps API error: %s", autoResp.Status)
 	}
+
 	return &autoResp, nil
 }
 
