@@ -11,14 +11,15 @@ import (
 
 func (api *API) CreateSavedLocationRepo(ctx context.Context, location model.SavedLocation) error {
 	stmt := `
-        INSERT INTO saved_locations (user_id, name, location)
-        VALUES ($1, $2, ST_SetSRID(ST_MakePoint($3, $4), 4326))
+        INSERT INTO saved_locations (user_id, name, location, place_id)
+        VALUES ($1, $2, ST_SetSRID(ST_MakePoint($3, $4), 4326), $5)
     `
 	_, err := api.Deps.DB.Pool().Exec(ctx, stmt,
 		location.UserID,
 		location.Name,
 		location.Location.P.X,
 		location.Location.P.Y,
+		location.PlaceID,
 	)
 	if err != nil {
 		return fmt.Errorf("creating saved location: %w", err)
@@ -32,6 +33,7 @@ func (api *API) GetSavedLocationRepo(ctx context.Context, id int64) (model.Saved
         SELECT id, user_id, name,
                ST_X(location::geometry) as longitude,
                ST_Y(location::geometry) as latitude,
+               place_id,
                created_at
         FROM saved_locations
         WHERE id = $1
@@ -43,6 +45,7 @@ func (api *API) GetSavedLocationRepo(ctx context.Context, id int64) (model.Saved
 		&location.Name,
 		&location.Location.P.X,
 		&location.Location.P.Y,
+		&location.PlaceID,
 		&location.CreatedAt,
 	)
 	if err != nil {
@@ -60,6 +63,7 @@ func (api *API) UpdateSavedLocationRepo(ctx context.Context, location model.Save
         UPDATE public.saved_locations
         SET name = $2,
             location = ST_SetSRID(ST_MakePoint($3, $4), 4326),
+            place_id = $5,
             updated_at = NOW()
         WHERE id = $1
     `
@@ -68,6 +72,7 @@ func (api *API) UpdateSavedLocationRepo(ctx context.Context, location model.Save
 		location.Name,
 		location.Location.P.X,
 		location.Location.P.Y,
+		location.PlaceID,
 	)
 	if err != nil {
 		return fmt.Errorf("updating saved location: %w", err)
@@ -83,7 +88,8 @@ func (api *API) GetSavedLocationsRepo(ctx context.Context, userID uuid.UUID) ([]
 	stmt := `
 		SELECT id, name, COALESCE(address, '') as address,
 			   ST_X(location::geometry) as longitude,
-			   ST_Y(location::geometry) as latitude
+			   ST_Y(location::geometry) as latitude,
+			   place_id
 		FROM saved_locations
 		WHERE user_id = $1
 	`
@@ -102,6 +108,7 @@ func (api *API) GetSavedLocationsRepo(ctx context.Context, userID uuid.UUID) ([]
 			&location.Address,
 			&location.Longitude,
 			&location.Latitude,
+			&location.PlaceID,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("scanning saved location: %w", err)

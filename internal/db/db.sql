@@ -174,6 +174,7 @@ CREATE TABLE saved_locations (
     user_id UUID REFERENCES users(id),
     name VARCHAR(50) NOT NULL, -- e.g., 'Home', 'Office'
     location GEOMETRY(Point, 4326) NOT NULL,
+    place_id VARCHAR(255), -- Google Place ID or other provider place ID
     created_at TIMESTAMPTZ DEFAULT current_timestamp
 );
 
