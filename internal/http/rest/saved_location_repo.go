@@ -10,6 +10,7 @@ import (
 )
 
 func (api *API) CreateSavedLocationRepo(ctx context.Context, location model.SavedLocation) error {
+
 	stmt := `
         INSERT INTO saved_locations (user_id, name, location, place_id)
         VALUES ($1, $2, ST_SetSRID(ST_MakePoint($3, $4), 4326), $5)
