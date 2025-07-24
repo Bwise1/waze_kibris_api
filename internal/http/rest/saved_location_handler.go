@@ -55,6 +55,7 @@ func (api *API) CreateSavedLocation(_ http.ResponseWriter, r *http.Request) *Ser
 		UserID:   userID,
 		Name:     req.Name,
 		Location: util.PointFromLatLon(req.Latitude, req.Longitude),
+		PlaceID:  req.PlaceID,
 	}
 
 	err = api.CreateSavedLocationRepo(ctx, newLocation)
@@ -85,6 +86,7 @@ func (api *API) GetAllSavedLocation(_ http.ResponseWriter, r *http.Request) *Ser
 		return respondWithError(err, "failed to get saved locations", values.Error, &tc)
 	}
 
+	log.Println(locations)
 	return &ServerResponse{
 		Message:    "Saved locations retrieved successfully",
 		Status:     values.Success,
@@ -107,7 +109,7 @@ func (api *API) GetSavedLocation(_ http.ResponseWriter, r *http.Request) *Server
 	}
 
 	lat, lon := util.PointToLatLon(location.Location)
-
+	log.Println(location)
 	return &ServerResponse{
 		Message:    "Saved location retrieved successfully",
 		Status:     values.Success,
