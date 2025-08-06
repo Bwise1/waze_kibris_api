@@ -19,7 +19,7 @@ func (api *API) PlacesRoutes() chi.Router {
 	mux := chi.NewRouter()
 
 	mux.Group(func(r chi.Router) {
-		// r.Use(api.RequireLogin) // Uncomment if authentication is needed
+		r.Use(api.RequireLogin) // Authentication required for all Places API endpoints
 
 		// Forward Geocoding (Search for an address/place)
 		// Query Params: ?text=...&size=...&layers=...&boundary.country=...
@@ -270,7 +270,7 @@ func (api *API) GooglePlaceDetailHandler(_ http.ResponseWriter, r *http.Request)
 		return respondWithError(nil, "Missing 'place_id' query parameter", values.BadRequestBody, &tc)
 	}
 
-	// Specify the fields you want from Google
+	// Specify the fields you want from Google (excluding atmosphere data)
 	fields := []string{
 		"name", "formatted_address", "geometry", "rating", "opening_hours", "photos", "reviews", "place_id",
 	}
