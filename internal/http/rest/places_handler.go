@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	googlemaps "github.com/bwise1/waze_kibris/internal/http/google"
+	"github.com/bwise1/waze_kibris/internal/http/mapbox"
 	stadiamaps "github.com/bwise1/waze_kibris/internal/http/stadia_maps" // Import stadia_maps
 	"github.com/bwise1/waze_kibris/util"
 	"github.com/bwise1/waze_kibris/util/tracing"
@@ -39,6 +40,7 @@ func (api *API) PlacesRoutes() chi.Router {
 		r.Method(http.MethodGet, "/googleautocomplete", Handler(api.GoogleAutocompleteHandler))
 
 		r.Method(http.MethodGet, "/googledirections", Handler(api.GoogleDirectionsHandler))
+		r.Method(http.MethodGet, "/mapboxdirections", Handler(api.MapboxDirectionsHandler))
 	})
 	return mux
 }
@@ -366,6 +368,52 @@ func (api *API) GoogleDirectionsHandler(_ http.ResponseWriter, r *http.Request) 
 	}
 	return &ServerResponse{
 		Message:    "Directions fetched successfully",
+		Status:     values.Success,
+		StatusCode: util.StatusCode(values.Success),
+		Data:       result,
+	}
+}
+
+// MapboxDirectionsHandler provides road-snapped directions using Mapbox Directions API
+// This gives PROFESSIONAL ROAD-ALIGNED polylines for navigation
+func (api *API) MapboxDirectionsHandler(_ http.ResponseWriter, r *http.Request) *ServerResponse {
+	tc := r.Context().Value(values.ContextTracingKey).(tracing.Context)
+	q := r.URL.Query()
+	origin := q.Get("origin")           // e.g., "35.1856,33.3823"
+	destination := q.Get("destination") // e.g., "35.1951,33.3662"
+	profile := q.Get("profile")         // "driving", "walking", "cycling", "driving-traffic"
+	waypoints := q["waypoint"]          // Optional waypoints
+
+	if origin == "" || destination == "" {
+		return respondWithError(nil, "Missing 'origin' or 'destination'", values.BadRequestBody, &tc)
+	}
+
+	// Build coordinates array for Mapbox (format: lng,lat)
+	coordinates := []string{
+		mapbox.FormatCoordinate(origin), // Convert lat,lng to lng,lat
+	}
+	
+	// Add waypoints if provided
+	for _, wp := range waypoints {
+		coordinates = append(coordinates, mapbox.FormatCoordinate(wp))
+	}
+	
+	// Add destination
+	coordinates = append(coordinates, mapbox.FormatCoordinate(destination))
+
+	// Get road-snapped directions from Mapbox
+	result, err := api.MapboxClient.Directions(r.Context(), coordinates, profile, true, true, "geojson")
+	if err != nil {
+		log.Printf("Error getting Mapbox directions: %v", err)
+		return respondWithError(err, "Failed to get Mapbox directions", values.SystemErr, &tc)
+	}
+
+	if len(result.Routes) == 0 {
+		return respondWithError(nil, "No routes found", values.NotFound, &tc)
+	}
+
+	return &ServerResponse{
+		Message:    "Mapbox directions fetched successfully with road-snapped coordinates",
 		Status:     values.Success,
 		StatusCode: util.StatusCode(values.Success),
 		Data:       result,

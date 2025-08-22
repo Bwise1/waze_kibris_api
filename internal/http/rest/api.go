@@ -10,6 +10,7 @@ import (
 	"github.com/bwise1/waze_kibris/config"
 	deps "github.com/bwise1/waze_kibris/internal/debs"
 	googlemaps "github.com/bwise1/waze_kibris/internal/http/google"
+	"github.com/bwise1/waze_kibris/internal/http/mapbox"
 	stadiamaps "github.com/bwise1/waze_kibris/internal/http/stadia_maps"
 	"github.com/bwise1/waze_kibris/internal/http/valhalla"
 	smtp "github.com/bwise1/waze_kibris/util/email"
@@ -46,6 +47,7 @@ type API struct {
 	ValhallaClient   *valhalla.ValhallaClient
 	StadiaClient     *stadiamaps.Client
 	GoogleMapsClient *googlemaps.GoogleMapsClient
+	MapboxClient     *mapbox.MapboxClient
 }
 
 func (api *API) Serve() error {

@@ -29,6 +29,7 @@ type Config struct {
 	ValhallaURL         string `env:"VALHALLA_URL"`
 	StadiaMapsAPIKey    string `env:"STADIA_MAPS_API_KEY"`
 	GoogleMapsAPIKey    string `env:"GOOGLE_MAPS_API_KEY"`
+	MapboxAPIKey        string `env:"MAPBOX_API_KEY"`
 }
 
 func New() *Config {

@@ -11,6 +11,7 @@ import (
 	"github.com/bwise1/waze_kibris/internal/db"
 	deps "github.com/bwise1/waze_kibris/internal/debs"
 	googlemaps "github.com/bwise1/waze_kibris/internal/http/google"
+	"github.com/bwise1/waze_kibris/internal/http/mapbox"
 	api "github.com/bwise1/waze_kibris/internal/http/rest"
 	stadiamaps "github.com/bwise1/waze_kibris/internal/http/stadia_maps"
 
@@ -39,6 +40,9 @@ func main() {
 	log.Printf("stadia client initialized")
 
 	googleMapsClient := googlemaps.NewGoogleMapsClient(cfg.GoogleMapsAPIKey)
+	mapboxClient := mapbox.NewMapboxClient(cfg.MapboxAPIKey)
+	log.Printf("Mapbox client initialized")
+	
 	a := &api.API{
 		Config:           cfg,
 		Deps:             deps,
@@ -47,6 +51,7 @@ func main() {
 		ValhallaClient:   valhallaClient,
 		StadiaClient:     stadiaClient,
 		GoogleMapsClient: googleMapsClient,
+		MapboxClient:     mapboxClient,
 	}
 	a.Init()
 	go deps.WebSocket.Run()
