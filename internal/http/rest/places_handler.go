@@ -358,6 +358,10 @@ func (api *API) GoogleDirectionsHandler(_ http.ResponseWriter, r *http.Request) 
 	mode := q.Get("mode")
 	waypoints := q["waypoint"] // e.g. ?waypoint=Benin&waypoint=Ibadan
 
+	requestSource := r.Header.Get("X-Request-Source")
+	log.Printf("[NAVIGATION-TRACKING] Google Directions Request -, Origin: %s, Destination: %s, Mode: %s, Waypoints: %v, Source: %s",
+		origin, destination, mode, waypoints, requestSource)
+
 	if origin == "" || destination == "" {
 		return respondWithError(nil, "Missing 'origin' or 'destination'", values.BadRequestBody, &tc)
 	}
@@ -384,6 +388,10 @@ func (api *API) MapboxDirectionsHandler(_ http.ResponseWriter, r *http.Request) 
 	profile := q.Get("profile")         // "driving", "walking", "cycling", "driving-traffic"
 	waypoints := q["waypoint"]          // Optional waypoints
 
+	// Log navigation request for tracking
+	requestSource := r.Header.Get("X-Request-Source")
+	log.Printf("[NAVIGATION-TRACKING] Mapbox Directions Request - %s, Origin: %s, Destination: %s, Profile: %s, Waypoints: %v, Source: %s", origin, destination, profile, waypoints, requestSource)
+
 	if origin == "" || destination == "" {
 		return respondWithError(nil, "Missing 'origin' or 'destination'", values.BadRequestBody, &tc)
 	}
@@ -392,12 +400,12 @@ func (api *API) MapboxDirectionsHandler(_ http.ResponseWriter, r *http.Request) 
 	coordinates := []string{
 		mapbox.FormatCoordinate(origin), // Convert lat,lng to lng,lat
 	}
-	
+
 	// Add waypoints if provided
 	for _, wp := range waypoints {
 		coordinates = append(coordinates, mapbox.FormatCoordinate(wp))
 	}
-	
+
 	// Add destination
 	coordinates = append(coordinates, mapbox.FormatCoordinate(destination))
 
