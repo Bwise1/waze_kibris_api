@@ -409,8 +409,14 @@ func (api *API) MapboxDirectionsHandler(_ http.ResponseWriter, r *http.Request) 
 	// Add destination
 	coordinates = append(coordinates, mapbox.FormatCoordinate(destination))
 
-	// Get road-snapped directions from Mapbox
-	result, err := api.MapboxClient.Directions(r.Context(), coordinates, profile, true, true, "geojson")
+	// Parse alternatives parameter (default true for route options)
+	alternatives := true
+	if altStr := q.Get("alternatives"); altStr == "false" {
+		alternatives = false
+	}
+
+	// Get road-snapped directions from Mapbox with alternatives
+	result, err := api.MapboxClient.Directions(r.Context(), coordinates, profile, alternatives, true, "geojson")
 	if err != nil {
 		log.Printf("Error getting Mapbox directions: %v", err)
 		return respondWithError(err, "Failed to get Mapbox directions", values.SystemErr, &tc)
