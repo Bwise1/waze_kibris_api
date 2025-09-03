@@ -78,6 +78,7 @@ func (api *API) setUpServerHandler() http.Handler {
 	mux.Mount("/route", api.RoutingRoutes())
 	mux.Mount("/community", api.GroupRoutes())
 	mux.Mount("/places", api.PlacesRoutes())
+	// mux.Mount("/location", api.LocationSnappingRoutes())
 
 	//websocket
 	mux.HandleFunc("/ws", api.Deps.WebSocket.HandleConnections)
