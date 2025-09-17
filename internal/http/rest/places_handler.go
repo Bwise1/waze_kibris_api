@@ -1,6 +1,8 @@
 package rest
 
 import (
+	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -41,6 +43,9 @@ func (api *API) PlacesRoutes() chi.Router {
 
 		r.Method(http.MethodGet, "/googledirections", Handler(api.GoogleDirectionsHandler))
 		r.Method(http.MethodGet, "/mapboxdirections", Handler(api.MapboxDirectionsHandler))
+		
+		// Map Matching for edge cases - POST to handle GPS coordinate arrays
+		r.Method(http.MethodPost, "/mapboxmapmatching", Handler(api.MapboxMapMatchingHandler))
 	})
 	return mux
 }
@@ -428,6 +433,102 @@ func (api *API) MapboxDirectionsHandler(_ http.ResponseWriter, r *http.Request) 
 
 	return &ServerResponse{
 		Message:    "Mapbox directions fetched successfully with road-snapped coordinates",
+		Status:     values.Success,
+		StatusCode: util.StatusCode(values.Success),
+		Data:       result,
+	}
+}
+
+// MapMatchingCoordinate represents a GPS coordinate for map matching
+type MapMatchingCoordinate struct {
+	Lat       float64 `json:"lat"`
+	Lng       float64 `json:"lng"`
+	Timestamp *int64  `json:"timestamp,omitempty"` // Unix timestamp in milliseconds
+}
+
+// MapMatchingRequest represents the request payload for map matching
+type MapMatchingRequest struct {
+	Coordinates []MapMatchingCoordinate `json:"coordinates"`
+	Radiuses    []float64               `json:"radiuses,omitempty"`    // Search radius per coordinate in meters
+	Approach    string                  `json:"approach,omitempty"`    // "unrestricted" or "curb"
+	Geometries  string                  `json:"geometries,omitempty"`  // "geojson" (default) or "polyline"
+}
+
+// MapboxMapMatchingHandler provides map matching for GPS traces using Mapbox Map Matching API
+// This is used sparingly for edge cases to minimize API usage and costs
+func (api *API) MapboxMapMatchingHandler(_ http.ResponseWriter, r *http.Request) *ServerResponse {
+	tc := r.Context().Value(values.ContextTracingKey).(tracing.Context)
+
+	// Parse request body
+	var req MapMatchingRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("Error decoding map matching request body: %v", err)
+		return respondWithError(err, "Invalid request payload", values.BadRequestBody, &tc)
+	}
+
+	// Validate coordinates
+	if len(req.Coordinates) < 2 {
+		return respondWithError(nil, "At least 2 coordinates required for map matching", values.BadRequestBody, &tc)
+	}
+
+	if len(req.Coordinates) > 100 {
+		return respondWithError(nil, "Maximum 100 coordinates allowed per request", values.BadRequestBody, &tc)
+	}
+
+	// Set defaults
+	if req.Approach == "" {
+		req.Approach = "unrestricted"
+	}
+	if req.Geometries == "" {
+		req.Geometries = "geojson"
+	}
+
+	// Log Map Matching request for cost tracking
+	requestSource := r.Header.Get("X-Request-Source")
+	log.Printf("[MAP-MATCHING-USAGE] Request - %d coordinates, Approach: %s, Source: %s", 
+		len(req.Coordinates), req.Approach, requestSource)
+
+	// Convert coordinates to Mapbox format (lng,lat strings)
+	coordinates := make([]string, len(req.Coordinates))
+	for i, coord := range req.Coordinates {
+		coordinates[i] = fmt.Sprintf("%.6f,%.6f", coord.Lng, coord.Lat)
+	}
+
+	// Prepare radiuses if provided
+	var radiusesParam *string
+	if len(req.Radiuses) > 0 {
+		radiuses := make([]string, len(req.Radiuses))
+		for i, radius := range req.Radiuses {
+			radiuses[i] = fmt.Sprintf("%.1f", radius)
+		}
+		radiusesStr := strings.Join(radiuses, ";")
+		radiusesParam = &radiusesStr
+	}
+
+	// Call Mapbox Map Matching API
+	result, err := api.MapboxClient.MapMatching(r.Context(), coordinates, req.Approach, req.Geometries, radiusesParam)
+	if err != nil {
+		log.Printf("Error calling Mapbox Map Matching API: %v", err)
+		
+		// Check for specific Mapbox API errors
+		if strings.Contains(err.Error(), "422") {
+			return respondWithError(err, "Invalid coordinates or no matching found", values.BadRequestBody, &tc)
+		}
+		if strings.Contains(err.Error(), "429") {
+			return respondWithError(err, "Rate limit exceeded", values.SystemErr, &tc)
+		}
+		
+		return respondWithError(err, "Failed to match GPS trace to roads", values.SystemErr, &tc)
+	}
+
+	// Log successful usage for monitoring
+	if result != nil && len(result.Matchings) > 0 {
+		log.Printf("[MAP-MATCHING-SUCCESS] Matched %d coordinates to %d road segments", 
+			len(req.Coordinates), len(result.Matchings))
+	}
+
+	return &ServerResponse{
+		Message:    "GPS trace matched to road network successfully",
 		Status:     values.Success,
 		StatusCode: util.StatusCode(values.Success),
 		Data:       result,

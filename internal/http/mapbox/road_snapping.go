@@ -13,30 +13,7 @@ import (
 	"time"
 )
 
-// MapMatchingResponse represents the response from Mapbox Map Matching API
-type MapMatchingResponse struct {
-	Matchings   []Matching   `json:"matchings"`
-	Tracepoints []Tracepoint `json:"tracepoints"`
-	Code        string       `json:"code"`
-}
-
-// Matching represents a matched route segment
-type Matching struct {
-	Confidence float64    `json:"confidence"` // 0.0 to 1.0
-	Geometry   LineString `json:"geometry"`
-	Distance   float64    `json:"distance"`
-	Duration   float64    `json:"duration"`
-	Weight     float64    `json:"weight"`
-}
-
-// Tracepoint represents a matched coordinate point
-type Tracepoint struct {
-	Location            []float64 `json:"location"`             // [lng, lat]
-	MatchingsIndex      int       `json:"matchings_index"`      // Which matching this belongs to
-	WaypointIndex       *int      `json:"waypoint_index"`       // Index of original waypoint
-	AlternativesCount   int       `json:"alternatives_count"`   // Number of alternative matches
-	DistanceAlongGeometry float64 `json:"distance_along_geometry"` // Distance along the matched geometry
-}
+// Note: MapMatchingResponse, Matching, and Tracepoint types are defined in mapbox.go
 
 // LocationSnapRequest represents a request to snap locations to roads
 type LocationSnapRequest struct {
