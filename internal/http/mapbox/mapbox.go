@@ -71,8 +71,8 @@ type Step struct {
 	Duration            float64              `json:"duration"` // in seconds
 	Distance            float64              `json:"distance"` // in meters
 	Mode                string               `json:"mode"`     // "driving", "walking", etc.
-	VoiceInstructions   []VoiceInstruction   `json:"voiceInstructions,omitempty"`
-	BannerInstructions  []BannerInstruction  `json:"bannerInstructions,omitempty"`
+	VoiceInstructions   []VoiceInstruction   `json:"voice_instructions,omitempty"`
+	BannerInstructions  []BannerInstruction  `json:"banner_instructions,omitempty"`
 	Ref                 string               `json:"ref,omitempty"`          // Road reference/number
 	Destinations        string               `json:"destinations,omitempty"` // Destination signage
 	Exits               string               `json:"exits,omitempty"`        // Exit numbers
@@ -107,18 +107,18 @@ type Maneuver struct {
 
 // VoiceInstruction contains voice guidance data
 type VoiceInstruction struct {
-	DistanceAlongGeometry float64 `json:"distanceAlongGeometry"` // Distance from start of step
-	Announcement          string  `json:"announcement"`          // Text to be spoken
-	SSMLAnnouncement      string  `json:"ssmlAnnouncement"`      // SSML formatted text
+	DistanceAlongGeometry float64 `json:"distance_along_geometry"` // Distance from start of step
+	Announcement          string  `json:"announcement"`            // Text to be spoken
+	SSMLAnnouncement      string  `json:"ssml_announcement"`       // SSML formatted text
 }
 
 // BannerInstruction contains visual banner guidance
 type BannerInstruction struct {
-	DistanceAlongGeometry float64           `json:"distanceAlongGeometry"` // Distance from start of step
-	Primary               BannerContent     `json:"primary"`               // Primary instruction text
-	Secondary             *BannerContent    `json:"secondary,omitempty"`   // Secondary instruction text
-	Sub                   *BannerContent    `json:"sub,omitempty"`         // Sub instruction text
-	View                  *JunctionView     `json:"view,omitempty"`        // Junction view data
+	DistanceAlongGeometry float64           `json:"distance_along_geometry"` // Distance from start of step
+	Primary               BannerContent     `json:"primary"`                 // Primary instruction text
+	Secondary             *BannerContent    `json:"secondary,omitempty"`     // Secondary instruction text
+	Sub                   *BannerContent    `json:"sub,omitempty"`           // Sub instruction text
+	View                  *JunctionView     `json:"view,omitempty"`          // Junction view data
 }
 
 // BannerContent contains instruction text and components
@@ -270,7 +270,7 @@ func (mc *MapboxClient) DirectionsWithNavigation(ctx context.Context, coordinate
 
 	// Set defaults
 	if profile == "" {
-		profile = "driving-traffic" // Use traffic-aware routing
+		profile = "driving" // Use basic driving profile for lane guidance support
 	}
 	if options == nil {
 		options = &NavigationOptions{

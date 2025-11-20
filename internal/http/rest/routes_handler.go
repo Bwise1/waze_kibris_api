@@ -65,7 +65,7 @@ func (api *API) GetRouteHandler(_ http.ResponseWriter, r *http.Request) *ServerR
 
 	// Set defaults
 	if req.Profile == "" {
-		req.Profile = "driving-traffic" // Default to traffic-aware routing
+		req.Profile = "driving" // Use basic driving profile for lane guidance support
 	}
 
 	// Use existing Mapbox client
