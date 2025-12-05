@@ -11,6 +11,7 @@ type SavedLocation struct {
 	ID        int64        `json:"id"`
 	UserID    uuid.UUID    `json:"user_id"`
 	Name      string       `json:"name"`
+	Address   *string      `json:"address"`
 	Location  pgtype.Point `json:"location"`
 	PlaceID   *string      `json:"place_id"`
 	CreatedAt time.Time    `json:"created_at"`
@@ -18,6 +19,7 @@ type SavedLocation struct {
 
 type LocationRequest struct {
 	Name      string  `json:"name" validate:"required,min=1,max=50"`
+	Address   *string `json:"address"`
 	Latitude  float64 `json:"latitude" validate:"required,latitude"`
 	Longitude float64 `json:"longitude" validate:"required,longitude"`
 	PlaceID   *string `json:"place_id"`

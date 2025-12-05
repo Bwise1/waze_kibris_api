@@ -70,6 +70,7 @@ func (api *API) CreateSavedLocation(_ http.ResponseWriter, r *http.Request) *Ser
 	newLocation := model.SavedLocation{
 		UserID:   userID,
 		Name:     req.Name,
+		Address:  req.Address,
 		Location: util.PointFromLatLon(req.Latitude, req.Longitude),
 		PlaceID:  req.PlaceID,
 	}

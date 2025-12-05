@@ -12,12 +12,13 @@ import (
 func (api *API) CreateSavedLocationRepo(ctx context.Context, location model.SavedLocation) error {
 
 	stmt := `
-        INSERT INTO saved_locations (user_id, name, location, place_id)
-        VALUES ($1, $2, ST_SetSRID(ST_MakePoint($3, $4), 4326), $5)
+        INSERT INTO saved_locations (user_id, name, address, location, place_id)
+        VALUES ($1, $2, $3, ST_SetSRID(ST_MakePoint($4, $5), 4326), $6)
     `
 	_, err := api.Deps.DB.Pool().Exec(ctx, stmt,
 		location.UserID,
 		location.Name,
+		location.Address,
 		location.Location.P.X,
 		location.Location.P.Y,
 		location.PlaceID,
