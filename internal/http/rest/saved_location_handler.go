@@ -2,6 +2,7 @@ package rest
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -49,6 +50,21 @@ func (api *API) CreateSavedLocation(_ http.ResponseWriter, r *http.Request) *Ser
 
 	if err := util.ValidateStruct(req); err != nil {
 		return respondWithError(err, "validation failed", values.BadRequestBody, &tc)
+	}
+
+	// Check if a location with the same name already exists for this user
+	exists, err := api.CheckSavedLocationExistsRepo(ctx, userID, req.Name)
+	if err != nil {
+		log.Println("failed to check if saved location exists", err)
+		return respondWithError(err, "failed to check existing locations", values.Error, &tc)
+	}
+	if exists {
+		return &ServerResponse{
+			Message:    fmt.Sprintf("A location named '%s' already exists. Please use a different name.", req.Name),
+			Status:     values.BadRequestBody,
+			StatusCode: util.StatusCode(values.BadRequestBody),
+			Data:       nil,
+		}
 	}
 
 	newLocation := model.SavedLocation{

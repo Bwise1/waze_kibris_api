@@ -175,7 +175,8 @@ CREATE TABLE saved_locations (
     name VARCHAR(50) NOT NULL, -- e.g., 'Home', 'Office'
     location GEOMETRY(Point, 4326) NOT NULL,
     place_id VARCHAR(255), -- Google Place ID or other provider place ID
-    created_at TIMESTAMPTZ DEFAULT current_timestamp
+    created_at TIMESTAMPTZ DEFAULT current_timestamp,
+    UNIQUE(user_id, name) -- Prevent duplicate location names per user
 );
 
 

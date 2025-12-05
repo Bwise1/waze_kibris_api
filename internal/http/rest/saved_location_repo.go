@@ -132,3 +132,16 @@ func (api *API) DeleteSavedLocationRepo(ctx context.Context, id int64) error {
 	}
 	return nil
 }
+
+// CheckSavedLocationExistsRepo checks if a location with the given name already exists for the user
+func (api *API) CheckSavedLocationExistsRepo(ctx context.Context, userID uuid.UUID, name string) (bool, error) {
+	stmt := `SELECT EXISTS(SELECT 1 FROM saved_locations WHERE user_id = $1 AND name = $2)`
+
+	var exists bool
+	err := api.Deps.DB.Pool().QueryRow(ctx, stmt, userID, name).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("checking if saved location exists: %w", err)
+	}
+
+	return exists, nil
+}
