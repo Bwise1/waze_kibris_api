@@ -224,7 +224,7 @@ func (mc *MapboxClient) Directions(ctx context.Context, coordinates []string, pr
 	params.Set("language", "en")               // Voice instruction language
 	params.Set("roundabout_exits", "true")     // Include roundabout exit info
 	// params.Set("waypoint_names", "true")    // Only enable when waypoint names are provided
-	params.Set("annotations", "duration,distance,speed,lane") // Additional route metadata including lane guidance
+	params.Set("annotations", "duration,distance,speed") // Additional route metadata (lane guidance comes from intersections, not annotations)
 	
 	fullURL := fmt.Sprintf("%s?%s", baseURL, params.Encode())
 	
@@ -334,8 +334,8 @@ func (mc *MapboxClient) DirectionsWithNavigation(ctx context.Context, coordinate
 		params.Set("exclude", options.Exclude)
 	}
 	
-	// Additional route metadata including lane guidance
-	params.Set("annotations", "duration,distance,speed,lane")
+	// Additional route metadata (lane guidance comes from intersections, not annotations)
+	params.Set("annotations", "duration,distance,speed")
 	
 	fullURL := fmt.Sprintf("%s?%s", baseURL, params.Encode())
 	
