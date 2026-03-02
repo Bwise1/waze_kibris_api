@@ -329,6 +329,9 @@ func (gc *GoogleMapsClient) PlaceAutocomplete(ctx context.Context, input string,
 	params.Set("input", input)
 	params.Set("key", gc.APIKey)
 
+	// // Restrict results to Nigeria and Cyprus (includes Northern Cyprus)
+	// params.Set("components", "country:ng|country:cy")
+
 	// **MODIFIED**: Changed "location" to "origin" to get distance calculation.
 	if origin != nil {
 		params.Set("origin", fmt.Sprintf("%f,%f", origin.Lat, origin.Lng))

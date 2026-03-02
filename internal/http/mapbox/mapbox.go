@@ -55,11 +55,19 @@ type LineString struct {
 
 // Leg represents a section of the route between waypoints
 type Leg struct {
-	Steps      []Step  `json:"steps"`
-	Summary    string  `json:"summary"`
-	Weight     float64 `json:"weight"`
-	Duration   float64 `json:"duration"` // in seconds
-	Distance   float64 `json:"distance"` // in meters
+	Steps      []Step     `json:"steps"`
+	Summary    string     `json:"summary"`
+	Weight     float64    `json:"weight"`
+	Duration   float64    `json:"duration"` // in seconds
+	Distance   float64    `json:"distance"` // in meters
+	Annotation *Annotation `json:"annotation,omitempty"` // Speed, distance, duration arrays per coordinate
+}
+
+// Annotation contains metadata arrays for each coordinate point in the leg geometry
+type Annotation struct {
+	Speed    []float64 `json:"speed,omitempty"`    // Speed in m/s for each coordinate
+	Distance []float64 `json:"distance,omitempty"` // Distance in meters for each coordinate
+	Duration []float64 `json:"duration,omitempty"` // Duration in seconds for each coordinate
 }
 
 // Step contains detailed navigation instructions
@@ -216,7 +224,7 @@ func (mc *MapboxClient) Directions(ctx context.Context, coordinates []string, pr
 	params.Set("language", "en")               // Voice instruction language
 	params.Set("roundabout_exits", "true")     // Include roundabout exit info
 	// params.Set("waypoint_names", "true")    // Only enable when waypoint names are provided
-	params.Set("annotations", "duration,distance,speed") // Additional route metadata
+	params.Set("annotations", "duration,distance,speed,lane") // Additional route metadata including lane guidance
 	
 	fullURL := fmt.Sprintf("%s?%s", baseURL, params.Encode())
 	
@@ -326,8 +334,8 @@ func (mc *MapboxClient) DirectionsWithNavigation(ctx context.Context, coordinate
 		params.Set("exclude", options.Exclude)
 	}
 	
-	// Additional route metadata
-	params.Set("annotations", "duration,distance,speed")
+	// Additional route metadata including lane guidance
+	params.Set("annotations", "duration,distance,speed,lane")
 	
 	fullURL := fmt.Sprintf("%s?%s", baseURL, params.Encode())
 	
