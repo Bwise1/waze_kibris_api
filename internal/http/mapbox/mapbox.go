@@ -39,78 +39,79 @@ type DirectionsResponse struct {
 
 // Route contains a single route with geometry and legs
 type Route struct {
-	Geometry     LineString `json:"geometry"`     // High-resolution road-snapped coordinates
-	Legs         []Leg      `json:"legs"`
-	WeightName   string     `json:"weight_name"`   // e.g., "routability"
-	Weight       float64    `json:"weight"`
-	Duration     float64    `json:"duration"`      // in seconds
-	Distance     float64    `json:"distance"`      // in meters
+	Geometry   LineString `json:"geometry"` // High-resolution road-snapped coordinates
+	Legs       []Leg      `json:"legs"`
+	WeightName string     `json:"weight_name"` // e.g., "routability"
+	Weight     float64    `json:"weight"`
+	Duration   float64    `json:"duration"` // in seconds
+	Distance   float64    `json:"distance"` // in meters
 }
 
 // LineString contains the route geometry with road-snapped coordinates
 type LineString struct {
-	Type        string        `json:"type"`        // "LineString"
-	Coordinates [][]float64   `json:"coordinates"` // [longitude, latitude] pairs - HIGH RESOLUTION!
+	Type        string      `json:"type"`        // "LineString"
+	Coordinates [][]float64 `json:"coordinates"` // [longitude, latitude] pairs - HIGH RESOLUTION!
 }
 
 // Leg represents a section of the route between waypoints
 type Leg struct {
-	Steps      []Step     `json:"steps"`
-	Summary    string     `json:"summary"`
-	Weight     float64    `json:"weight"`
-	Duration   float64    `json:"duration"` // in seconds
-	Distance   float64    `json:"distance"` // in meters
+	Steps      []Step      `json:"steps"`
+	Summary    string      `json:"summary"`
+	Weight     float64     `json:"weight"`
+	Duration   float64     `json:"duration"`             // in seconds
+	Distance   float64     `json:"distance"`             // in meters
 	Annotation *Annotation `json:"annotation,omitempty"` // Speed, distance, duration arrays per coordinate
 }
 
 // Annotation contains metadata arrays for each coordinate point in the leg geometry
 type Annotation struct {
-	Speed    []float64 `json:"speed,omitempty"`    // Speed in m/s for each coordinate
-	Distance []float64 `json:"distance,omitempty"` // Distance in meters for each coordinate
-	Duration []float64 `json:"duration,omitempty"` // Duration in seconds for each coordinate
+	Speed             []float64 `json:"speed,omitempty"`              // Speed in m/s for each coordinate
+	Distance          []float64 `json:"distance,omitempty"`           // Distance in meters for each coordinate
+	Duration          []float64 `json:"duration,omitempty"`           // Duration in seconds for each coordinate
+	CongestionNumeric []float64 `json:"congestion_numeric,omitempty"` // Congestion level 0-100 for each coordinate pair (only available for driving-traffic profile)
 }
 
 // Step contains detailed navigation instructions
 type Step struct {
-	Intersections       []Intersection       `json:"intersections"`
-	Geometry            LineString           `json:"geometry"`
-	Maneuver            Maneuver             `json:"maneuver"`
-	Name                string               `json:"name"`
-	Duration            float64              `json:"duration"` // in seconds
-	Distance            float64              `json:"distance"` // in meters
-	Mode                string               `json:"mode"`     // "driving", "walking", etc.
-	VoiceInstructions   []VoiceInstruction   `json:"voice_instructions,omitempty"`
-	BannerInstructions  []BannerInstruction  `json:"banner_instructions,omitempty"`
-	Ref                 string               `json:"ref,omitempty"`          // Road reference/number
-	Destinations        string               `json:"destinations,omitempty"` // Destination signage
-	Exits               string               `json:"exits,omitempty"`        // Exit numbers
-	Pronunciation       string               `json:"pronunciation,omitempty"`
-	RotaryName          string               `json:"rotary_name,omitempty"`
-	RotaryPronunciation string               `json:"rotary_pronunciation,omitempty"`
+	Intersections       []Intersection      `json:"intersections"`
+	Geometry            LineString          `json:"geometry"`
+	Maneuver            Maneuver            `json:"maneuver"`
+	Name                string              `json:"name"`
+	Duration            float64             `json:"duration"` // in seconds
+	Distance            float64             `json:"distance"` // in meters
+	Mode                string              `json:"mode"`     // "driving", "walking", etc.
+	VoiceInstructions   []VoiceInstruction  `json:"voice_instructions,omitempty"`
+	BannerInstructions  []BannerInstruction `json:"banner_instructions,omitempty"`
+	Ref                 string              `json:"ref,omitempty"`          // Road reference/number
+	Destinations        string              `json:"destinations,omitempty"` // Destination signage
+	Exits               string              `json:"exits,omitempty"`        // Exit numbers
+	Pronunciation       string              `json:"pronunciation,omitempty"`
+	RotaryName          string              `json:"rotary_name,omitempty"`
+	RotaryPronunciation string              `json:"rotary_pronunciation,omitempty"`
 }
 
 // Intersection contains information about road intersections
 type Intersection struct {
-	Location    []float64 `json:"location"`    // [longitude, latitude]
-	Bearings    []int     `json:"bearings"`    // Available road directions
-	Entry       []bool    `json:"entry"`       // Which roads can be entered
-	In          int       `json:"in,omitempty"`       // Entry bearing index
-	Out         int       `json:"out,omitempty"`      // Exit bearing index
-	Lanes       []Lane    `json:"lanes,omitempty"`    // Lane guidance information
-	Classes     []string  `json:"classes,omitempty"`  // Road classification
+	Location        []float64        `json:"location"`                    // [longitude, latitude]
+	Bearings        []int            `json:"bearings"`                    // Available road directions
+	Entry           []bool           `json:"entry"`                       // Which roads can be entered
+	In              int              `json:"in,omitempty"`                // Entry bearing index
+	Out             int              `json:"out,omitempty"`               // Exit bearing index
+	Lanes           []Lane           `json:"lanes,omitempty"`             // Lane guidance information
+	Classes         []string         `json:"classes,omitempty"`           // Road classification
 	MapboxStreetsV8 *MapboxStreetsV8 `json:"mapbox_streets_v8,omitempty"` // Additional road data
 }
 
 // Maneuver contains turn-by-turn navigation instructions
 type Maneuver struct {
-	Type           string    `json:"type"`           // "depart", "turn", "arrive", etc.
-	Instruction    string    `json:"instruction"`    // Human-readable instruction
-	BearingAfter   int       `json:"bearing_after"`  // Direction after maneuver
-	BearingBefore  int       `json:"bearing_before"` // Direction before maneuver
-	Location       []float64 `json:"location"`       // [longitude, latitude]
-	Modifier       string    `json:"modifier"`       // "left", "right", "straight", etc.
-	Exit           int       `json:"exit,omitempty"`           // Roundabout exit number
-	RoundaboutExits int      `json:"roundabout_exits,omitempty"` // Total exits in roundabout
+	Type            string    `json:"type"`                       // "depart", "turn", "arrive", etc.
+	Instruction     string    `json:"instruction"`                // Human-readable instruction
+	BearingAfter    int       `json:"bearing_after"`              // Direction after maneuver
+	BearingBefore   int       `json:"bearing_before"`             // Direction before maneuver
+	Location        []float64 `json:"location"`                   // [longitude, latitude]
+	Modifier        string    `json:"modifier"`                   // "left", "right", "straight", etc.
+	Exit            int       `json:"exit,omitempty"`             // Roundabout exit number
+	RoundaboutExits int       `json:"roundabout_exits,omitempty"` // Total exits in roundabout
 }
 
 // VoiceInstruction contains voice guidance data
@@ -122,29 +123,29 @@ type VoiceInstruction struct {
 
 // BannerInstruction contains visual banner guidance
 type BannerInstruction struct {
-	DistanceAlongGeometry float64           `json:"distance_along_geometry"` // Distance from start of step
-	Primary               BannerContent     `json:"primary"`                 // Primary instruction text
-	Secondary             *BannerContent    `json:"secondary,omitempty"`     // Secondary instruction text
-	Sub                   *BannerContent    `json:"sub,omitempty"`           // Sub instruction text
-	View                  *JunctionView     `json:"view,omitempty"`          // Junction view data
+	DistanceAlongGeometry float64        `json:"distance_along_geometry"` // Distance from start of step
+	Primary               BannerContent  `json:"primary"`                 // Primary instruction text
+	Secondary             *BannerContent `json:"secondary,omitempty"`     // Secondary instruction text
+	Sub                   *BannerContent `json:"sub,omitempty"`           // Sub instruction text
+	View                  *JunctionView  `json:"view,omitempty"`          // Junction view data
 }
 
 // BannerContent contains instruction text and components
 type BannerContent struct {
-	Text       string              `json:"text"`       // Display text
-	Components []BannerComponent   `json:"components"` // Text components
-	Type       string              `json:"type"`       // Instruction type
-	Modifier   string              `json:"modifier"`   // Direction modifier
-	Degrees    float64             `json:"degrees,omitempty"` // Turn angle
-	DrivingSide string             `json:"driving_side,omitempty"` // left/right
+	Text        string            `json:"text"`                   // Display text
+	Components  []BannerComponent `json:"components"`             // Text components
+	Type        string            `json:"type"`                   // Instruction type
+	Modifier    string            `json:"modifier"`               // Direction modifier
+	Degrees     float64           `json:"degrees,omitempty"`      // Turn angle
+	DrivingSide string            `json:"driving_side,omitempty"` // left/right
 }
 
 // BannerComponent contains parts of instruction text
 type BannerComponent struct {
-	Text         string `json:"text"`
-	Type         string `json:"type"`         // "text", "icon", "delimiter", "exit-number", etc.
-	Abbreviation string `json:"abbr,omitempty"`
-	AbbreviationPriority int `json:"abbr_priority,omitempty"`
+	Text                 string `json:"text"`
+	Type                 string `json:"type"` // "text", "icon", "delimiter", "exit-number", etc.
+	Abbreviation         string `json:"abbr,omitempty"`
+	AbbreviationPriority int    `json:"abbr_priority,omitempty"`
 }
 
 // Lane contains lane guidance information
@@ -156,8 +157,8 @@ type Lane struct {
 
 // JunctionView contains 3D intersection imagery data
 type JunctionView struct {
-	BaseURL   string `json:"base_url"`   // Base URL for junction images
-	DataId    string `json:"data_id"`    // Junction data identifier
+	BaseURL string `json:"base_url"` // Base URL for junction images
+	DataId  string `json:"data_id"`  // Junction data identifier
 }
 
 // MapboxStreetsV8 contains additional road metadata
@@ -167,14 +168,14 @@ type MapboxStreetsV8 struct {
 
 // NavigationOptions contains parameters for enhanced navigation
 type NavigationOptions struct {
-	VoiceInstructions   bool   `json:"voice_instructions"`
-	BannerInstructions  bool   `json:"banner_instructions"`
-	VoiceUnits          string `json:"voice_units"`          // "metric" or "imperial"
-	Language            string `json:"language"`             // "en", "es", etc.
-	RoundaboutExits     bool   `json:"roundabout_exits"`
-	WaypointNames       bool   `json:"waypoint_names"`
-	Approaches          string `json:"approaches,omitempty"`  // "unrestricted", "curb", etc.
-	Exclude             string `json:"exclude,omitempty"`     // "toll", "ferry", "motorway"
+	VoiceInstructions  bool   `json:"voice_instructions"`
+	BannerInstructions bool   `json:"banner_instructions"`
+	VoiceUnits         string `json:"voice_units"` // "metric" or "imperial"
+	Language           string `json:"language"`    // "en", "es", etc.
+	RoundaboutExits    bool   `json:"roundabout_exits"`
+	WaypointNames      bool   `json:"waypoint_names"`
+	Approaches         string `json:"approaches,omitempty"` // "unrestricted", "curb", etc.
+	Exclude            string `json:"exclude,omitempty"`    // "toll", "ferry", "motorway"
 }
 
 // Directions fetches directions between waypoints using Mapbox Directions API
@@ -189,7 +190,7 @@ func (mc *MapboxClient) Directions(ctx context.Context, coordinates []string, pr
 
 	// Set defaults
 	if profile == "" {
-		profile = "driving" // "driving", "walking", "cycling", "driving-traffic"
+		profile = "driving-traffic" // "driving", "walking", "cycling", "driving-traffic" (default to driving-traffic for congestion data)
 	}
 	if geometries == "" {
 		geometries = "geojson" // Better for road-snapped coordinates
@@ -197,37 +198,37 @@ func (mc *MapboxClient) Directions(ctx context.Context, coordinates []string, pr
 
 	// Build coordinates string: "lon1,lat1;lon2,lat2;..."
 	coordinatesStr := strings.Join(coordinates, ";")
-	
+
 	// Build Mapbox Directions API URL
 	// Format: https://api.mapbox.com/directions/v5/mapbox/driving/coordinates?params
 	baseURL := fmt.Sprintf("https://api.mapbox.com/directions/v5/mapbox/%s/%s", profile, coordinatesStr)
-	
+
 	params := url.Values{}
 	params.Set("access_token", mc.APIKey)
 	params.Set("geometries", geometries) // "geojson" gives high-resolution coordinates
-	
+
 	if alternatives {
 		params.Set("alternatives", "true")
 	}
 	if steps {
 		params.Set("steps", "true") // Include turn-by-turn instructions
 	}
-	
+
 	// Add other useful parameters for better road snapping
-	params.Set("overview", "full")      // Full geometry detail
+	params.Set("overview", "full")           // Full geometry detail
 	params.Set("continue_straight", "false") // Allow U-turns for better routes
-	
+
 	// Enhanced navigation parameters
-	params.Set("voice_instructions", "true")   // Include voice guidance
-	params.Set("banner_instructions", "true")  // Include visual banners
-	params.Set("voice_units", "metric")        // Distance units for voice
-	params.Set("language", "en")               // Voice instruction language
-	params.Set("roundabout_exits", "true")     // Include roundabout exit info
+	params.Set("voice_instructions", "true")  // Include voice guidance
+	params.Set("banner_instructions", "true") // Include visual banners
+	params.Set("voice_units", "metric")       // Distance units for voice
+	params.Set("language", "en")              // Voice instruction language
+	params.Set("roundabout_exits", "true")    // Include roundabout exit info
 	// params.Set("waypoint_names", "true")    // Only enable when waypoint names are provided
-	params.Set("annotations", "duration,distance,speed") // Additional route metadata (lane guidance comes from intersections, not annotations)
-	
+	params.Set("annotations", "duration,distance,speed,congestion_numeric") // Additional route metadata including congestion (only available for driving-traffic profile)
+
 	fullURL := fmt.Sprintf("%s?%s", baseURL, params.Encode())
-	
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fullURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Mapbox Directions request: %w", err)
@@ -278,7 +279,7 @@ func (mc *MapboxClient) DirectionsWithNavigation(ctx context.Context, coordinate
 
 	// Set defaults
 	if profile == "" {
-		profile = "driving" // Use basic driving profile for lane guidance support
+		profile = "driving-traffic" // Default to driving-traffic for congestion data (lane guidance still works with driving-traffic)
 	}
 	if options == nil {
 		options = &NavigationOptions{
@@ -293,17 +294,17 @@ func (mc *MapboxClient) DirectionsWithNavigation(ctx context.Context, coordinate
 
 	// Build coordinates string: "lon1,lat1;lon2,lat2;..."
 	coordinatesStr := strings.Join(coordinates, ";")
-	
+
 	// Build Mapbox Directions API URL
 	baseURL := fmt.Sprintf("https://api.mapbox.com/directions/v5/mapbox/%s/%s", profile, coordinatesStr)
-	
+
 	params := url.Values{}
 	params.Set("access_token", mc.APIKey)
-	params.Set("geometries", "geojson") // High-resolution coordinates
-	params.Set("steps", "true")         // Always include steps for navigation
-	params.Set("overview", "full")      // Full geometry detail
+	params.Set("geometries", "geojson")      // High-resolution coordinates
+	params.Set("steps", "true")              // Always include steps for navigation
+	params.Set("overview", "full")           // Full geometry detail
 	params.Set("continue_straight", "false") // Allow U-turns
-	
+
 	if alternatives {
 		params.Set("alternatives", "true")
 	}
@@ -333,12 +334,12 @@ func (mc *MapboxClient) DirectionsWithNavigation(ctx context.Context, coordinate
 	if options.Exclude != "" {
 		params.Set("exclude", options.Exclude)
 	}
-	
-	// Additional route metadata (lane guidance comes from intersections, not annotations)
-	params.Set("annotations", "duration,distance,speed")
-	
+
+	// Additional route metadata including congestion (only available for driving-traffic profile)
+	params.Set("annotations", "duration,distance,speed,congestion_numeric")
+
 	fullURL := fmt.Sprintf("%s?%s", baseURL, params.Encode())
-	
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fullURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Mapbox Directions request: %w", err)
@@ -392,9 +393,9 @@ func FormatCoordinate(latLng string) string {
 
 // MapMatchingResponse represents the response from Mapbox Map Matching API
 type MapMatchingResponse struct {
-	Matchings []Matching `json:"matchings"`
+	Matchings   []Matching   `json:"matchings"`
 	Tracepoints []Tracepoint `json:"tracepoints"`
-	Code      string     `json:"code"` // "Ok", "NoMatch", "TooManyCoordinates", etc.
+	Code        string       `json:"code"` // "Ok", "NoMatch", "TooManyCoordinates", etc.
 }
 
 // Matching represents a matched route segment
@@ -402,20 +403,20 @@ type Matching struct {
 	Confidence float64    `json:"confidence"` // Match confidence (0-1)
 	Geometry   LineString `json:"geometry"`   // Road-matched coordinates
 	Legs       []Leg      `json:"legs"`
-	Duration   float64    `json:"duration"`   // in seconds
-	Distance   float64    `json:"distance"`   // in meters
+	Duration   float64    `json:"duration"` // in seconds
+	Distance   float64    `json:"distance"` // in meters
 	Weight     float64    `json:"weight"`
 	WeightName string     `json:"weight_name"`
 }
 
 // Tracepoint represents the relationship between input and matched coordinates
 type Tracepoint struct {
-	MatchingsIndex int       `json:"matchings_index"` // Index of matching this point belongs to
-	WaypointIndex  int       `json:"waypoint_index"`  // Index in the original coordinates
-	AlternativesCount int    `json:"alternatives_count"` // Number of alternative matches
-	Distance       float64   `json:"distance"`        // Distance from input coordinate to matched point
-	Name           string    `json:"name"`            // Road name
-	Location       []float64 `json:"location"`        // [longitude, latitude] of matched point
+	MatchingsIndex    int       `json:"matchings_index"`    // Index of matching this point belongs to
+	WaypointIndex     int       `json:"waypoint_index"`     // Index in the original coordinates
+	AlternativesCount int       `json:"alternatives_count"` // Number of alternative matches
+	Distance          float64   `json:"distance"`           // Distance from input coordinate to matched point
+	Name              string    `json:"name"`               // Road name
+	Location          []float64 `json:"location"`           // [longitude, latitude] of matched point
 }
 
 // MapMatching snaps GPS coordinates to the road network using Mapbox Map Matching API
@@ -441,26 +442,26 @@ func (mc *MapboxClient) MapMatching(ctx context.Context, coordinates []string, a
 
 	// Build coordinates string: "lon1,lat1;lon2,lat2;..."
 	coordinatesStr := strings.Join(coordinates, ";")
-	
+
 	// Build Mapbox Map Matching API URL
 	// Format: https://api.mapbox.com/matching/v5/mapbox/driving/coordinates?params
 	baseURL := fmt.Sprintf("https://api.mapbox.com/matching/v5/mapbox/driving/%s", coordinatesStr)
-	
+
 	params := url.Values{}
 	params.Set("access_token", mc.APIKey)
 	params.Set("geometries", geometries)
 	params.Set("approach", approach)
-	params.Set("overview", "full")      // Full geometry detail
-	params.Set("steps", "false")        // Don't need turn-by-turn for map matching
-	params.Set("annotations", "false")  // Minimize response size for cost efficiency
-	
+	params.Set("overview", "full")     // Full geometry detail
+	params.Set("steps", "false")       // Don't need turn-by-turn for map matching
+	params.Set("annotations", "false") // Minimize response size for cost efficiency
+
 	// Add radiuses if provided
 	if radiuses != nil && *radiuses != "" {
 		params.Set("radiuses", *radiuses)
 	}
-	
+
 	fullURL := fmt.Sprintf("%s?%s", baseURL, params.Encode())
-	
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fullURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Mapbox Map Matching request: %w", err)
@@ -494,7 +495,7 @@ func (mc *MapboxClient) MapMatching(ctx context.Context, coordinates []string, a
 	// Check the code field in the response
 	if matchResp.Code != "Ok" {
 		log.Printf("Mapbox Map Matching API returned code: %s\n", matchResp.Code)
-		
+
 		// Handle specific error codes
 		switch matchResp.Code {
 		case "NoMatch":
