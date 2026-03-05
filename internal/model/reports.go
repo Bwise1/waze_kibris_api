@@ -9,7 +9,7 @@ import (
 type Report struct {
 	ID             int64     `json:"id"`
 	UserID         uuid.UUID `json:"user_id"`
-	Type           string    `json:"type"`              // TRAFFIC, POLICE, ACCIDENT, HAZARD, ROAD_CLOSED
+	Type           string    `json:"type"`              // TRAFFIC, POLICE, ACCIDENT, HAZARD, ROAD_CLOSED, PHOTOSHARING
 	Subtype        *string   `json:"subtype,omitempty"` // LIGHT, HEAVY, STAND_STILL, VISIBLE, HIDDEN, OTHER_SIDE, MINOR, MAJOR
 	Latitude       float64   `json:"latitude"`
 	Longitude      float64   `json:"longitude"`

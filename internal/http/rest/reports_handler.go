@@ -8,7 +8,9 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/bwise1/waze_kibris/internal/http/mapbox"
@@ -51,6 +53,11 @@ type EnhancedCreateReportRequest struct {
 
 func (api *API) CreateReport(_ http.ResponseWriter, r *http.Request) *ServerResponse {
 	tc := r.Context().Value(values.ContextTracingKey).(tracing.Context)
+
+	// Support multipart/form-data for app photo-sharing (type + latitude + longitude + optional image)
+	if strings.Contains(r.Header.Get("Content-Type"), "multipart/form-data") {
+		return api.createReportMultipart(r, &tc)
+	}
 
 	var req EnhancedCreateReportRequest
 	if decodeErr := util.DecodeJSONBody(&tc, r.Body, &req); decodeErr != nil {
@@ -146,17 +153,106 @@ func (api *API) CreateReport(_ http.ResponseWriter, r *http.Request) *ServerResp
 	}
 }
 
+// createReportMultipart handles POST /reports with multipart/form-data (type, latitude, longitude, optional image).
+func (api *API) createReportMultipart(r *http.Request, tc *tracing.Context) *ServerResponse {
+	const maxMultipartMem = 10 << 20 // 10 MB
+	if err := r.ParseMultipartForm(maxMultipartMem); err != nil {
+		return respondWithError(err, "unable to parse multipart form", values.BadRequestBody, tc)
+	}
+
+	reportType := strings.TrimSpace(r.FormValue("type"))
+	if reportType == "" {
+		return respondWithError(fmt.Errorf("type required"), "type, latitude, longitude required", values.BadRequestBody, tc)
+	}
+	reportType = strings.ToUpper(reportType)
+
+	latStr, lngStr := r.FormValue("latitude"), r.FormValue("longitude")
+	latitude, err := strconv.ParseFloat(latStr, 64)
+	if err != nil {
+		return respondWithError(err, "type, latitude, longitude required", values.BadRequestBody, tc)
+	}
+	longitude, err := strconv.ParseFloat(lngStr, 64)
+	if err != nil {
+		return respondWithError(err, "type, latitude, longitude required", values.BadRequestBody, tc)
+	}
+
+	userID, err := util.GetUserIDFromContext(r.Context())
+	if err != nil {
+		return respondWithError(err, "unable to get user ID from context", values.NotAuthorised, tc)
+	}
+
+	var imageURL *string
+	if file, _, err := r.FormFile("image"); err == nil {
+		defer file.Close()
+		tmp, err := os.CreateTemp("", "report-*")
+		if err != nil {
+			return respondWithError(err, "failed to create temp file for image", values.Error, tc)
+		}
+		tmpPath := tmp.Name()
+		defer os.Remove(tmpPath)
+		if _, err := io.Copy(tmp, file); err != nil {
+			tmp.Close()
+			return respondWithError(err, "failed to write image", values.Error, tc)
+		}
+		if err := tmp.Close(); err != nil {
+			return respondWithError(err, "failed to close temp file", values.Error, tc)
+		}
+		url, err := api.Deps.Cloudinary.UploadImage(r.Context(), tmpPath, "reports")
+		if err != nil {
+			log.Printf("Cloudinary upload failed: %v", err)
+			return respondWithError(err, "failed to upload image", values.Error, tc)
+		}
+		imageURL = &url
+	}
+
+	userStr, pendingStr := "USER", "PENDING"
+	req := model.CreateReportRequest{
+		UserID:       userID,
+		Type:         reportType,
+		Latitude:     latitude,
+		Longitude:    longitude,
+		ExpiresAt:    time.Now().Add(6 * time.Hour),
+		ImageURL:     imageURL,
+		ReportSource: &userStr,
+		ReportStatus: &pendingStr,
+	}
+
+	// Apply road snapping (same as JSON path)
+	snappedLat, snappedLng, err := api.snapReportToRoad(r.Context(), req.Latitude, req.Longitude, req.Type, false)
+	if err != nil {
+		log.Printf("⚠️ Road snapping failed for %s report: %v. Using original coordinates.", req.Type, err)
+	} else {
+		req.Latitude = snappedLat
+		req.Longitude = snappedLng
+	}
+
+	newReport, status, message, err := api.CreateReportHelper(r.Context(), req)
+	if err != nil {
+		return respondWithError(err, message, status, tc)
+	}
+	return &ServerResponse{
+		Message:    message,
+		Status:     status,
+		StatusCode: http.StatusCreated,
+		Data:       newReport,
+	}
+}
+
 // snapReportToRoad uses Map Matching API to snap report location to nearest road
 func (api *API) snapReportToRoad(ctx context.Context, lat, lng float64, reportType string, oppositeSide bool) (float64, float64, error) {
-	// Set snap radius based on report type
+	// Set snap radius based on report type (normalize for switch)
 	snapRadius := 25
 	switch reportType {
-	case "police":
+	case "police", "POLICE":
 		snapRadius = 50 // Police can be further from road
-	case "accident":
+	case "accident", "ACCIDENT":
 		snapRadius = 30 // Accidents might be slightly off road
-	case "traffic":
+	case "traffic", "TRAFFIC":
 		snapRadius = 20 // Traffic reports should be close to road
+	case "photosharing", "PHOTOSHARING":
+		snapRadius = 30 // Photo/image reports similar to accident
+	default:
+		// HAZARD, ROAD_CLOSED, etc. use default 25m
 	}
 
 	// Call Map Matching API directly
@@ -201,7 +297,7 @@ func (api *API) snapReportToRoad(ctx context.Context, lat, lng float64, reportTy
 
 	// Get the snapped coordinates
 	tracepoint := mapMatchingResp.Tracepoints[0]
-	if tracepoint.Location == nil || len(tracepoint.Location) < 2 {
+	if len(tracepoint.Location) < 2 {
 		return lat, lng, fmt.Errorf("invalid tracepoint location")
 	}
 
@@ -267,7 +363,7 @@ func (api *API) GetNearbyReports(_ http.ResponseWriter, r *http.Request) *Server
 
 	radius, err := strconv.ParseFloat(r.URL.Query().Get("radius"), 64)
 	if err != nil || radius <= 0 {
-		radius = 100 // Default radius in meters
+		radius = 1000 // Default radius in meters (match Node backend / app expectations)
 	}
 
 	types := r.URL.Query()["type"]
@@ -295,7 +391,7 @@ func (api *API) GetNearbyReports(_ http.ResponseWriter, r *http.Request) *Server
 	if err != nil {
 		return respondWithError(err, message, status, &tc)
 	}
-	if reports == nil {
+	if len(reports) == 0 {
 		reports = []model.Report{}
 	}
 	return &ServerResponse{
@@ -422,10 +518,16 @@ func (api *API) VoteOnReport(_ http.ResponseWriter, r *http.Request) *ServerResp
 		return respondWithError(err, "unable to get user ID from context", values.NotAuthorised, &tc)
 	}
 
+	// Normalize vote type for DB (expects UPVOTE, DOWNVOTE)
+	voteType := strings.ToUpper(strings.TrimSpace(req.VoteType))
+	if voteType != "UPVOTE" && voteType != "DOWNVOTE" {
+		return respondWithError(fmt.Errorf("invalid vote_type"), "vote_type must be upvote or downvote", values.BadRequestBody, &tc)
+	}
+
 	vote := model.Vote{
 		ReportID: id,
 		UserID:   userID,
-		VoteType: req.VoteType,
+		VoteType: voteType,
 	}
 
 	err = api.AddVoteRepo(r.Context(), vote)
@@ -433,13 +535,32 @@ func (api *API) VoteOnReport(_ http.ResponseWriter, r *http.Request) *ServerResp
 		return respondWithError(err, "failed to add vote", values.Error, &tc)
 	}
 
-	// Optionally, update the vote counts in the report
-	// You can implement logic to fetch the current vote counts and update them
+	// Update report vote counts so response reflects new totals
+	up, down := 0, 0
+	if voteType == "UPVOTE" {
+		up = 1
+	} else {
+		down = 1
+	}
+	if err := api.UpdateReportVotesRepo(r.Context(), reportID, up, down); err != nil {
+		log.Printf("warning: failed to update report vote counts: %v", err)
+	}
 
+	// Return updated report so app's GetReportsResponse.fromJson and data.isNotEmpty work
+	report, _, _, err := api.GetReportByIDHelper(r.Context(), reportID)
+	if err != nil {
+		return &ServerResponse{
+			Message:    "Vote recorded",
+			Status:     values.Success,
+			StatusCode: util.StatusCode(values.Success),
+			Data:       []model.Report{},
+		}
+	}
 	return &ServerResponse{
-		Message:    "Vote added successfully",
+		Message:    "Vote recorded",
 		Status:     values.Success,
 		StatusCode: util.StatusCode(values.Success),
+		Data:       []model.Report{report},
 	}
 }
 
