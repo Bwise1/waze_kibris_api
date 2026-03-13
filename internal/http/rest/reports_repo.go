@@ -58,16 +58,17 @@ func (api *API) CreateReportRepo(ctx context.Context, report model.CreateReportR
 func (api *API) GetReportByIDRepo(ctx context.Context, id string) (model.Report, error) {
 	query := `
         SELECT
-            id, user_id, type, subtype, ST_X(position) as longitude,
-            ST_Y(position) as latitude, description, severity, verified_count,
-            active, resolved, created_at, updated_at, expires_at, image_url,
-            report_source, report_status, comments_count, upvotes_count, downvotes_count
-        FROM reports
-        WHERE id = $1
+            r.id, r.user_id, u.username, r.type, r.subtype, ST_X(r.position) as longitude,
+            ST_Y(r.position) as latitude, r.description, r.severity, r.verified_count,
+            r.active, r.resolved, r.created_at, r.updated_at, r.expires_at, r.image_url,
+            r.report_source, r.report_status, r.comments_count, r.upvotes_count, r.downvotes_count
+        FROM reports r
+        JOIN users u ON u.id = r.user_id
+        WHERE r.id = $1
     `
 	var report model.Report
 	err := api.DB.QueryRow(ctx, query, id).Scan(
-		&report.ID, &report.UserID, &report.Type, &report.Subtype,
+		&report.ID, &report.UserID, &report.Username, &report.Type, &report.Subtype,
 		&report.Longitude, &report.Latitude, &report.Description, &report.Severity,
 		&report.VerifiedCount, &report.Active, &report.Resolved, &report.CreatedAt,
 		&report.UpdatedAt, &report.ExpiresAt, &report.ImageURL, &report.ReportSource,
@@ -128,22 +129,23 @@ func (api *API) GetNearbyReportsRepo(ctx context.Context, params model.NearbyRep
 	// Build dynamic query with optional filters
 	baseQuery := `
         SELECT
-            id, user_id, type, subtype,
-            ST_X(position::geometry) as longitude,
-            ST_Y(position::geometry) as latitude,
-            description, severity, verified_count,
-            active, resolved, created_at, updated_at,
-            expires_at, image_url, report_source, report_status,
-            comments_count, upvotes_count, downvotes_count,
-            ST_Distance(position::geography, ST_MakePoint($1, $2)::geography) as distance  -- Returns meters directly
-        FROM reports
+            r.id, r.user_id, u.username, r.type, r.subtype,
+            ST_X(r.position::geometry) as longitude,
+            ST_Y(r.position::geometry) as latitude,
+            r.description, r.severity, r.verified_count,
+            r.active, r.resolved, r.created_at, r.updated_at,
+            r.expires_at, r.image_url, r.report_source, r.report_status,
+            r.comments_count, r.upvotes_count, r.downvotes_count,
+            ST_Distance(r.position::geography, ST_MakePoint($1, $2)::geography) as distance  -- Returns meters directly
+        FROM reports r
+        JOIN users u ON u.id = r.user_id
         WHERE  ST_DWithin(
-			position::geography,
+			r.position::geography,
 			ST_MakePoint($1, $2)::geography,
 			$3  -- Radius in meters directly
 		)
-        AND expires_at > NOW()
-        AND active = true
+        AND r.expires_at > NOW()
+        AND r.active = true
     `
 
 	// Build where clause and args dynamically
@@ -195,7 +197,7 @@ func (api *API) GetNearbyReportsRepo(ctx context.Context, params model.NearbyRep
 		var distance float64
 
 		err := rows.Scan(
-			&report.ID, &report.UserID, &report.Type, &report.Subtype,
+			&report.ID, &report.UserID, &report.Username, &report.Type, &report.Subtype,
 			&report.Longitude, &report.Latitude, &report.Description,
 			&report.Severity, &report.VerifiedCount, &report.Active,
 			&report.Resolved, &report.CreatedAt, &report.UpdatedAt,
@@ -288,13 +290,14 @@ func (api *API) IncrementVerifiedCountRepo(ctx context.Context, id string) error
 func (api *API) GetUserReportsRepo(ctx context.Context, userID string) ([]model.Report, error) {
 	query := `
         SELECT
-            id, user_id, type, subtype, ST_X(position) as longitude,
-            ST_Y(position) as latitude, description, severity, verified_count,
-            active, resolved, created_at, updated_at, expires_at, image_url,
-            report_source, report_status, comments_count, upvotes_count, downvotes_count
-        FROM reports
-        WHERE user_id = $1
-        ORDER BY created_at DESC
+            r.id, r.user_id, u.username, r.type, r.subtype, ST_X(r.position) as longitude,
+            ST_Y(r.position) as latitude, r.description, r.severity, r.verified_count,
+            r.active, r.resolved, r.created_at, r.updated_at, r.expires_at, r.image_url,
+            r.report_source, r.report_status, r.comments_count, r.upvotes_count, r.downvotes_count
+        FROM reports r
+        JOIN users u ON u.id = r.user_id
+        WHERE r.user_id = $1
+        ORDER BY r.created_at DESC
     `
 	rows, err := api.DB.Query(ctx, query, userID)
 	if err != nil {
@@ -306,7 +309,7 @@ func (api *API) GetUserReportsRepo(ctx context.Context, userID string) ([]model.
 	for rows.Next() {
 		var report model.Report
 		err := rows.Scan(
-			&report.ID, &report.UserID, &report.Type, &report.Subtype,
+			&report.ID, &report.UserID, &report.Username, &report.Type, &report.Subtype,
 			&report.Longitude, &report.Latitude, &report.Description, &report.Severity,
 			&report.VerifiedCount, &report.Active, &report.Resolved, &report.CreatedAt,
 			&report.UpdatedAt, &report.ExpiresAt, &report.ImageURL, &report.ReportSource,

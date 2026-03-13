@@ -96,15 +96,32 @@ func (api *API) CreateNewUser(req model.RegisterRequest) (model.VerifyCodeRespon
 		return model.VerifyCodeResponse{}, values.Conflict, "Email already exists", nil
 	}
 
-	user := model.User{
-		ID:           util.GenerateUUID(),
-		Email:        req.Email,
-		AuthProvider: "email",
-	}
+	// Generate a pseudonymous, driver-themed display username for new users.
+	const maxAttempts = 5
+	var user model.User
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		displayName := util.GenerateDisplayName()
+		user = model.User{
+			ID:           util.GenerateUUID(),
+			Email:        req.Email,
+			AuthProvider: "email",
+			Username:     &displayName,
+		}
 
-	err = api.CreateNewUserRepo(ctx, user)
-	if err != nil {
-		return model.VerifyCodeResponse{}, values.Error, "Error creating new user", err
+		err = api.CreateNewUserRepo(ctx, user)
+		if err == nil {
+			break
+		}
+
+		// If it's not a unique violation on username, bail out immediately.
+		var pgErr *pgconn.PgError
+		if !errors.As(err, &pgErr) || pgErr.Code != "23505" {
+			return model.VerifyCodeResponse{}, values.Error, "Error creating new user", err
+		}
+
+		if attempt == maxAttempts-1 {
+			return model.VerifyCodeResponse{}, values.Error, "Failed to generate unique username", err
+		}
 	}
 
 	// Generate verification code
@@ -359,6 +376,7 @@ func (api *API) generateAndStoreTokens(user model.User) (model.LoginResponse, st
 			ID:                user.ID,
 			FirstName:         user.FirstName,
 			LastName:          user.LastName,
+			Username:          user.Username,
 			Email:             user.Email,
 			IsVerified:        user.IsVerified,
 			PreferredLanguage: user.PreferredLanguage,

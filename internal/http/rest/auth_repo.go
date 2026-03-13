@@ -33,10 +33,11 @@ func (api *API) CreateNewUserRepo(ctx context.Context, req model.User) error {
         INSERT INTO users (
             id,
             email,
-            auth_provider
-        ) VALUES ($1, $2, $3)
+            auth_provider,
+            username
+        ) VALUES ($1, $2, $3, $4)
     `
-	_, err := api.Deps.DB.Pool().Exec(ctx, stmt, req.ID, req.Email, req.AuthProvider)
+	_, err := api.Deps.DB.Pool().Exec(ctx, stmt, req.ID, req.Email, req.AuthProvider, req.Username)
 	if err != nil {
 		log.Println("error creating new user", err)
 		return err
@@ -103,13 +104,14 @@ func (api *API) GetUserByEmail(ctx context.Context, email string) (model.User, e
 
 func (api *API) GetUserByID(ctx context.Context, userID string) (model.User, error) {
 	var user model.User
-	stmt := `SELECT id, email, firstname, lastname, auth_provider, is_verified, preferred_language, created_at, updated_at FROM users WHERE id = $1`
+	stmt := `SELECT id, email, firstname, lastname, username, auth_provider, is_verified, preferred_language, created_at, updated_at FROM users WHERE id = $1`
 
 	err := api.Deps.DB.Pool().QueryRow(ctx, stmt, userID).Scan(
 		&user.ID,
 		&user.Email,
 		&user.FirstName,
 		&user.LastName,
+		&user.Username,
 		&user.AuthProvider,
 		&user.IsVerified,
 		&user.PreferredLanguage,
