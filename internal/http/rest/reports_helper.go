@@ -2,9 +2,12 @@ package rest
 
 import (
 	"context"
+	"encoding/json"
+	"log"
 
 	"github.com/bwise1/waze_kibris/internal/model"
 	"github.com/bwise1/waze_kibris/util/values"
+	"github.com/bwise1/waze_kibris/util/websockets"
 )
 
 func (api *API) CreateReportHelper(ctx context.Context, report model.CreateReportRequest) (model.CreateReportResponse, string, string, error) {
@@ -12,6 +15,54 @@ func (api *API) CreateReportHelper(ctx context.Context, report model.CreateRepor
 	if err != nil {
 		return model.CreateReportResponse{}, values.Error, "Failed to create report", err
 	}
+
+	// Broadcast a WebSocket report_update to nearby users
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("panic in CreateReportHelper websocket broadcast: %v", r)
+			}
+		}()
+
+		payload := websockets.ReportUpdatePayload{
+			ID:             newReport.ID,
+			UserID:         newReport.UserID.String(),
+			Type:           newReport.Type,
+			Latitude:       newReport.Latitude,
+			Longitude:      newReport.Longitude,
+			Active:         newReport.Active,
+			Resolved:       newReport.Resolved,
+			UpvotesCount:   newReport.UpvotesCount,
+			DownvotesCount: newReport.DownvotesCount,
+		}
+
+		b, err := json.Marshal(payload)
+		if err != nil {
+			log.Printf("failed to marshal ReportUpdatePayload: %v", err)
+			return
+		}
+
+		msg := websockets.Message{
+			Type:    websockets.MsgTypeReportUpdate,
+			UserID:  newReport.UserID.String(),
+			Content: string(b),
+		}
+
+		raw, err := json.Marshal(msg)
+		if err != nil {
+			log.Printf("failed to marshal websocket Message: %v", err)
+			return
+		}
+
+		// 5km radius for now; can be tuned later
+		api.Deps.WebSocket.BroadcastReportUpdate(
+			raw,
+			newReport.Latitude,
+			newReport.Longitude,
+			5000,
+		)
+	}()
+
 	return newReport, values.Created, "Report created successfully", nil
 }
 

@@ -15,6 +15,19 @@ const (
 	MsgTypeCommentUpdate = "comment_update"
 )
 
+// ReportUpdatePayload is sent in Message.Content for report_update events.
+type ReportUpdatePayload struct {
+	ID             int64   `json:"id"`
+	UserID         string  `json:"user_id"`
+	Type           string  `json:"type"`
+	Latitude       float64 `json:"latitude"`
+	Longitude      float64 `json:"longitude"`
+	Active         bool    `json:"active"`
+	Resolved       bool    `json:"resolved"`
+	UpvotesCount   int     `json:"upvotes_count"`
+	DownvotesCount int     `json:"downvotes_count"`
+}
+
 // Client represents a connected WebSocket user
 type Client struct {
 	Conn      *websocket.Conn
