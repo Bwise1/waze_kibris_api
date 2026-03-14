@@ -78,6 +78,7 @@ package websockets
 import (
 	"encoding/json"
 	"log"
+	"math"
 	"net/http"
 
 	"github.com/gorilla/websocket"
@@ -206,8 +207,20 @@ func (manager *WebSocketManager) BroadcastReportUpdate(report []byte, reportLat,
 	}
 }
 
-// isNearby checks if a user is within a given radius
+// isNearby checks if a user is within a given radius using the Haversine formula
 func isNearby(userLat, userLon, reportLat, reportLon, radius float64) bool {
-	// Simple distance formula (can be replaced with Haversine formula)
-	return (userLat-reportLat)*(userLat-reportLat)+(userLon-reportLon)*(userLon-reportLon) <= (radius * radius)
+	const earthRadius = 6371000 // Earth radius in meters
+
+	lat1Rad := userLat * math.Pi / 180
+	lat2Rad := reportLat * math.Pi / 180
+	deltaLatRad := (reportLat - userLat) * math.Pi / 180
+	deltaLonRad := (reportLon - userLon) * math.Pi / 180
+
+	a := math.Sin(deltaLatRad/2)*math.Sin(deltaLatRad/2) +
+		math.Cos(lat1Rad)*math.Cos(lat2Rad)*
+			math.Sin(deltaLonRad/2)*math.Sin(deltaLonRad/2)
+	c := 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
+
+	distance := earthRadius * c
+	return distance <= radius
 }
