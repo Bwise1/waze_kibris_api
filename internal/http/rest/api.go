@@ -63,23 +63,26 @@ func (api *API) Serve() error {
 
 func (api *API) setUpServerHandler() http.Handler {
 	mux := chi.NewRouter()
-	mux.Use(RequestTracing)
 
-	mux.Get("/",
-		func(w http.ResponseWriter, r *http.Request) {
-			w.Write([]byte("Hello, World!"))
-		},
-	)
+	// REST API Group with Tracing
+	mux.Group(func(r chi.Router) {
+		r.Use(RequestTracing)
 
-	mux.Mount("/auth", api.AuthRoutes())
-	mux.Mount("/reports", api.ReportRoutes())
-	mux.Mount("/saved-locations", api.SavedLocationRoutes())
-	mux.Mount("/user", api.UserRoutes())
-	mux.Mount("/route", api.RoutingRoutes())
-	mux.Mount("/community", api.GroupRoutes())
-	mux.Mount("/places", api.PlacesRoutes())
-	// mux.Mount("/location", api.LocationSnappingRoutes())
+		r.Get("/",
+			func(w http.ResponseWriter, r *http.Request) {
+				w.Write([]byte("Hello, World!"))
+			},
+		)
 
+		r.Mount("/auth", api.AuthRoutes())
+		r.Mount("/reports", api.ReportRoutes())
+		r.Mount("/saved-locations", api.SavedLocationRoutes())
+		r.Mount("/user", api.UserRoutes())
+		r.Mount("/route", api.RoutingRoutes())
+		r.Mount("/community", api.GroupRoutes())
+		r.Mount("/places", api.PlacesRoutes())
+		// mux.Mount("/location", api.LocationSnappingRoutes())
+	})
 	//websocket
 	mux.HandleFunc("/ws", api.Deps.WebSocket.HandleConnections)
 
