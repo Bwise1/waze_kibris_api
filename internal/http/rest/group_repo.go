@@ -194,10 +194,12 @@ func (api *API) GetCommunityGroupByShortCode(ctx context.Context, shortCode stri
 
 func (api *API) GetGroupMessages(ctx context.Context, groupID uuid.UUID, limit int) ([]model.GroupMessage, error) {
 	query := `
-        SELECT id, group_id, sender_id, message_type, content, is_deleted, created_at, updated_at
-        FROM messages
-        WHERE group_id = $1 AND is_deleted = FALSE
-        ORDER BY created_at DESC
+        SELECT m.id, m.group_id, m.sender_id, m.message_type, m.content, m.is_deleted, m.created_at, m.updated_at,
+               u.username AS sender_username
+        FROM messages m
+        LEFT JOIN users u ON u.id = m.sender_id
+        WHERE m.group_id = $1 AND m.is_deleted = FALSE
+        ORDER BY m.created_at DESC
         LIMIT $2
     `
 	rows, err := api.Deps.DB.Pool().Query(ctx, query, groupID, limit)
@@ -209,13 +211,16 @@ func (api *API) GetGroupMessages(ctx context.Context, groupID uuid.UUID, limit i
 	var messages []model.GroupMessage
 	for rows.Next() {
 		var msg model.GroupMessage
+		var senderUsername *string
 		err := rows.Scan(
 			&msg.ID, &msg.GroupID, &msg.UserID, &msg.MessageType,
 			&msg.Content, &msg.IsDeleted, &msg.CreatedAt, &msg.UpdatedAt,
+			&senderUsername,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("scanning group message: %w", err)
 		}
+		msg.SenderUsername = senderUsername
 		messages = append(messages, msg)
 	}
 

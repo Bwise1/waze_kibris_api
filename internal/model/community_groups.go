@@ -39,13 +39,14 @@ type GroupMembership struct {
 }
 
 type GroupMessage struct {
-	ID          uuid.UUID  `json:"id"`
-	GroupID     uuid.UUID  `json:"group_id"`
-	UserID      uuid.UUID  `json:"user_id"`
-	MessageType string     `json:"message_type"` // "text", "location", "system"
-	Content     string     `json:"content"`
-	IsDeleted   bool       `json:"is_deleted"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
-	DeletedAt   *time.Time `json:"deleted_at,omitempty"`
+	ID             uuid.UUID  `json:"id"`
+	GroupID        uuid.UUID  `json:"group_id"`
+	UserID         uuid.UUID  `json:"user_id"`
+	SenderUsername *string    `json:"sender_username,omitempty"` // from JOIN with users, for display
+	MessageType    string     `json:"message_type"`             // "text", "location", "system"
+	Content        string     `json:"content"`
+	IsDeleted      bool       `json:"is_deleted"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+	DeletedAt      *time.Time `json:"deleted_at,omitempty"`
 }
