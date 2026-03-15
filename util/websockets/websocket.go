@@ -80,6 +80,7 @@ import (
 	"log"
 	"math"
 	"net/http"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -93,14 +94,55 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
+const (
+	clientSendBufferSize = 256
+	readLimit           = 512
+	pongWait            = 60 * time.Second  // time to wait for pong before considering conn dead
+	pingPeriod          = 30 * time.Second  // server sends ping this often
+	writeWait           = 10 * time.Second  // deadline for write (ping or app message)
+)
+
 // NewWebSocketManager initializes a WebSocketManager
 func NewWebSocketManager() *WebSocketManager {
 	return &WebSocketManager{
-		clients:    make(map[*websocket.Conn]*Client),
-		broadcast:  make(chan []byte),
-		register:   make(chan *Client),
-		unregister: make(chan *websocket.Conn),
-		send:       make(chan DirectMessage),
+		clients:      make(map[*websocket.Conn]*Client),
+		userIndex:    make(map[string]*Client),
+		broadcast:    make(chan []byte),
+		register:     make(chan *Client),
+		registerUser: make(chan *Client, 64),
+		unregister:   make(chan *websocket.Conn),
+		send:         make(chan DirectMessage),
+	}
+}
+
+// writePump runs in a goroutine per client; it reads from client.Send and writes to the websocket.
+// Sends a protocol-level ping every pingPeriod so the client responds with pong; readPump uses
+// pong to extend the read deadline and detect dead connections.
+// Exits when client.Send is closed (on unregister).
+func (manager *WebSocketManager) writePump(client *Client) {
+	ticker := time.NewTicker(pingPeriod)
+	defer func() {
+		ticker.Stop()
+		client.Conn.Close()
+	}()
+	for {
+		select {
+		case msg, ok := <-client.Send:
+			if !ok {
+				return
+			}
+			client.Conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if err := client.Conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+				log.Printf("writePump error for client %s: %v", client.UserID, err)
+				return
+			}
+		case <-ticker.C:
+			client.Conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if err := client.Conn.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(writeWait)); err != nil {
+				log.Printf("writePump ping error for client %s: %v", client.UserID, err)
+				return
+			}
+		}
 	}
 }
 
@@ -112,35 +154,48 @@ func (manager *WebSocketManager) Run() {
 			manager.mu.Lock()
 			manager.clients[client.Conn] = client
 			manager.mu.Unlock()
+			go manager.writePump(client)
 
 		case conn := <-manager.unregister:
 			manager.mu.Lock()
 			if client, exists := manager.clients[conn]; exists {
 				delete(manager.clients, conn)
-				conn.Close()
+				if client.UserID != "" && manager.userIndex[client.UserID] == client {
+					delete(manager.userIndex, client.UserID)
+				}
+				close(client.Send)
 				log.Printf("Client %s disconnected", client.UserID)
 			}
+			manager.mu.Unlock()
+			conn.Close()
+
+		case client := <-manager.registerUser:
+			manager.mu.Lock()
+			manager.userIndex[client.UserID] = client
 			manager.mu.Unlock()
 
 		case message := <-manager.broadcast:
 			manager.mu.Lock()
-			for _, client := range manager.clients {
-				if err := client.Conn.WriteMessage(websocket.TextMessage, message); err != nil {
-					client.Conn.Close()
-					delete(manager.clients, client.Conn)
-				}
+			clients := make([]*Client, 0, len(manager.clients))
+			for _, c := range manager.clients {
+				clients = append(clients, c)
 			}
 			manager.mu.Unlock()
+			for _, client := range clients {
+				select {
+				case client.Send <- message:
+				default:
+					// buffer full; skip this client to avoid blocking
+				}
+			}
 
 		case direct := <-manager.send:
 			manager.mu.Lock()
-			for _, client := range manager.clients {
-				if client.UserID == direct.ReceiverID {
-					if err := client.Conn.WriteMessage(websocket.TextMessage, []byte(direct.Message)); err != nil {
-						client.Conn.Close()
-						delete(manager.clients, client.Conn)
-					}
-					break
+			client := manager.userIndex[direct.ReceiverID]
+			if client != nil {
+				select {
+				case client.Send <- []byte(direct.Message):
+				default:
 				}
 			}
 			manager.mu.Unlock()
@@ -148,7 +203,8 @@ func (manager *WebSocketManager) Run() {
 	}
 }
 
-// HandleConnections upgrades HTTP requests to WebSocket connections
+// HandleConnections upgrades HTTP requests to WebSocket connections.
+// The read loop (readPump) sets read limit, deadline, and pong handler so dead connections are detected.
 func (manager *WebSocketManager) HandleConnections(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -156,19 +212,37 @@ func (manager *WebSocketManager) HandleConnections(w http.ResponseWriter, r *htt
 		return
 	}
 
-	client := &Client{Conn: conn}
+	client := &Client{
+		Conn: conn,
+		Send: make(chan []byte, clientSendBufferSize),
+	}
 	manager.register <- client
 
+	defer conn.Close()
 	defer func() {
 		manager.unregister <- conn
 	}()
 
+	// When client sends a close frame, unregister so Run() can clean up; return nil for default close response.
+	conn.SetCloseHandler(func(code int, text string) error {
+		manager.unregister <- conn
+		return nil
+	})
+
+	// readPump: limit size, deadline, and pong handler to detect dead connections
+	conn.SetReadLimit(readLimit)
+	conn.SetReadDeadline(time.Now().Add(pongWait))
+	conn.SetPongHandler(func(string) error {
+		conn.SetReadDeadline(time.Now().Add(pongWait))
+		return nil
+	})
+
 	for {
 		_, msg, err := conn.ReadMessage()
 		if err != nil {
-			manager.unregister <- conn
 			break
 		}
+		conn.SetReadDeadline(time.Now().Add(pongWait))
 
 		var message Message
 		if err := json.Unmarshal(msg, &message); err != nil {
@@ -177,12 +251,18 @@ func (manager *WebSocketManager) HandleConnections(w http.ResponseWriter, r *htt
 		}
 
 		switch message.Type {
+		case "ping":
+			// Keepalive from client; no reply needed, keeps connection alive past proxy timeouts
+
 		case MsgTypeSubscribe:
 			client.UserID = message.UserID
 			client.Latitude = message.Latitude
 			client.Longitude = message.Longitude
 			if message.ActiveGroupIDs != nil {
 				client.ActiveGroupIDs = message.ActiveGroupIDs
+			}
+			if client.UserID != "" {
+				manager.registerUser <- client
 			}
 
 		case MsgTypeReportUpdate:
@@ -203,14 +283,20 @@ func (manager *WebSocketManager) HandleConnections(w http.ResponseWriter, r *htt
 	}
 }
 
-// BroadcastReportUpdate sends reports only to nearby users
+// BroadcastReportUpdate sends reports only to nearby users via each client's send channel
 func (manager *WebSocketManager) BroadcastReportUpdate(report []byte, reportLat, reportLon float64, radius float64) {
 	manager.mu.Lock()
-	defer manager.mu.Unlock()
-
-	for _, client := range manager.clients {
-		if isNearby(client.Latitude, client.Longitude, reportLat, reportLon, radius) {
-			client.Conn.WriteMessage(websocket.TextMessage, report)
+	clients := make([]*Client, 0, len(manager.clients))
+	for _, c := range manager.clients {
+		if isNearby(c.Latitude, c.Longitude, reportLat, reportLon, radius) {
+			clients = append(clients, c)
+		}
+	}
+	manager.mu.Unlock()
+	for _, client := range clients {
+		select {
+		case client.Send <- report:
+		default:
 		}
 	}
 }
@@ -236,17 +322,20 @@ func isNearby(userLat, userLon, reportLat, reportLon, radius float64) bool {
 // BroadcastToGroup sends a message to all connected clients who have groupID in their ActiveGroupIDs
 func (manager *WebSocketManager) BroadcastToGroup(groupID string, message []byte) {
 	manager.mu.Lock()
-	defer manager.mu.Unlock()
-
-	for _, client := range manager.clients {
-		for _, activeGrpID := range client.ActiveGroupIDs {
+	clients := make([]*Client, 0, len(manager.clients))
+	for _, c := range manager.clients {
+		for _, activeGrpID := range c.ActiveGroupIDs {
 			if activeGrpID == groupID {
-				if err := client.Conn.WriteMessage(websocket.TextMessage, message); err != nil {
-					log.Printf("Error broadcasting to group %s for client %s: %v", groupID, client.UserID, err)
-					// We don't remove the client here, let the unregister handle it during normal read loop if dead
-				}
+				clients = append(clients, c)
 				break
 			}
+		}
+	}
+	manager.mu.Unlock()
+	for _, client := range clients {
+		select {
+		case client.Send <- message:
+		default:
 		}
 	}
 }

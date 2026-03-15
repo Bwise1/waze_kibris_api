@@ -30,9 +30,11 @@ type ReportUpdatePayload struct {
 	DownvotesCount int     `json:"downvotes_count"`
 }
 
-// Client represents a connected WebSocket user
+// Client represents a connected WebSocket user.
+// Send is the per-client queue; writePump reads from it and writes to Conn.
 type Client struct {
 	Conn           *websocket.Conn
+	Send           chan []byte
 	UserID         string
 	Latitude       float64
 	Longitude      float64
@@ -41,8 +43,10 @@ type Client struct {
 
 type WebSocketManager struct {
 	clients    map[*websocket.Conn]*Client
+	userIndex  map[string]*Client // userID -> client for O(1) direct messaging
 	broadcast  chan []byte
 	register   chan *Client
+	registerUser chan *Client     // client that just subscribed (has UserID set); updates userIndex
 	unregister chan *websocket.Conn
 	send       chan DirectMessage
 	mu         sync.Mutex
