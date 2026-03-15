@@ -319,6 +319,26 @@ func isNearby(userLat, userLon, reportLat, reportLon, radius float64) bool {
 	return distance <= radius
 }
 
+// GetNearbyUsers returns connected clients within radiusMeters of (lat, lon), excluding excludeUserID.
+func (manager *WebSocketManager) GetNearbyUsers(lat, lon, radiusMeters float64, excludeUserID string) []NearbyUser {
+	manager.mu.Lock()
+	defer manager.mu.Unlock()
+	out := make([]NearbyUser, 0)
+	for _, c := range manager.clients {
+		if c.UserID == "" || c.UserID == excludeUserID {
+			continue
+		}
+		if isNearby(c.Latitude, c.Longitude, lat, lon, radiusMeters) {
+			out = append(out, NearbyUser{
+				UserID:    c.UserID,
+				Latitude:  c.Latitude,
+				Longitude: c.Longitude,
+			})
+		}
+	}
+	return out
+}
+
 // BroadcastToGroup sends a message to all connected clients who have groupID in their ActiveGroupIDs
 func (manager *WebSocketManager) BroadcastToGroup(groupID string, message []byte) {
 	manager.mu.Lock()

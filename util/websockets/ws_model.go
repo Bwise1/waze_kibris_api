@@ -58,6 +58,13 @@ type DirectMessage struct {
 	Message    string `json:"message"`
 }
 
+// NearbyUser is a minimal representation of a connected user for the nearby-users API.
+type NearbyUser struct {
+	UserID    string  `json:"user_id"`
+	Latitude  float64 `json:"latitude"`
+	Longitude float64 `json:"longitude"`
+}
+
 // Message struct for incoming WebSocket messages
 type Message struct {
 	Type           string   `json:"type"`

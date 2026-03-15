@@ -80,6 +80,7 @@ func (api *API) CreateCommunityGroup(ctx context.Context, group model.CommunityG
 		if err != nil {
 			return err
 		}
+		createdGroup.IsMember = true // creator is always a member
 
 		// Insert creator into group_memberships as admin
 		_, err = tx.Exec(ctx, `
@@ -102,6 +103,7 @@ func (api *API) GetCommunityGroupByID(ctx context.Context, groupID uuid.UUID) (m
         SELECT cg.id, cg.name, cg.description, cg.group_type, cg.destination_place_id, cg.destination_name,
                ST_AsText(cg.destination_location), cg.visibility, cg.creator_id, cg.icon_url,
                (SELECT COUNT(*)::int FROM group_memberships gm WHERE gm.group_id = cg.id) AS member_count,
+               false AS is_member,
                cg.last_message_at, cg.is_deleted, cg.created_at, cg.updated_at, cg.short_code
         FROM community_groups cg
         WHERE cg.id = $1 AND cg.is_deleted = FALSE
@@ -111,7 +113,7 @@ func (api *API) GetCommunityGroupByID(ctx context.Context, groupID uuid.UUID) (m
 	err := api.Deps.DB.Pool().QueryRow(ctx, query, groupID).Scan(
 		&group.ID, &group.Name, &group.Description, &group.GroupType, &group.DestinationPlaceID,
 		&group.DestinationName, &group.DestinationLocation, &group.Visibility, &group.CreatorID,
-		&group.IconURL, &group.MemberCount, &group.LastMessageAt, &group.IsDeleted,
+		&group.IconURL, &group.MemberCount, &group.IsMember, &group.LastMessageAt, &group.IsDeleted,
 		&group.CreatedAt, &group.UpdatedAt, &group.ShortCode,
 	)
 
@@ -144,17 +146,22 @@ func (api *API) UpdateCommunityGroup(ctx context.Context, group model.CommunityG
 	return err
 }
 
-func (api *API) SearchCommunityGroup(ctx context.Context) ([]model.CommunityGroup, error) {
+func (api *API) SearchCommunityGroup(ctx context.Context, currentUserID *uuid.UUID) ([]model.CommunityGroup, error) {
 	query := `
         SELECT cg.id, cg.name, cg.description, cg.group_type, cg.destination_place_id, cg.destination_name,
                ST_AsText(cg.destination_location), cg.visibility, cg.creator_id, cg.icon_url,
                (SELECT COUNT(*)::int FROM group_memberships gm WHERE gm.group_id = cg.id) AS member_count,
+               EXISTS(SELECT 1 FROM group_memberships gm2 WHERE gm2.group_id = cg.id AND gm2.user_id = $1) AS is_member,
                cg.last_message_at, cg.is_deleted, cg.created_at, cg.updated_at, cg.short_code
         FROM community_groups cg
         WHERE cg.is_deleted = FALSE
         ORDER BY cg.last_message_at DESC NULLS LAST, cg.created_at DESC
     `
-	rows, err := api.Deps.DB.Pool().Query(ctx, query)
+	userID := uuid.Nil
+	if currentUserID != nil {
+		userID = *currentUserID
+	}
+	rows, err := api.Deps.DB.Pool().Query(ctx, query, userID)
 	if err != nil {
 		return nil, fmt.Errorf("querying community groups: %w", err)
 	}
@@ -166,7 +173,7 @@ func (api *API) SearchCommunityGroup(ctx context.Context) ([]model.CommunityGrou
 		err := rows.Scan(
 			&group.ID, &group.Name, &group.Description, &group.GroupType, &group.DestinationPlaceID,
 			&group.DestinationName, &group.DestinationLocation, &group.Visibility, &group.CreatorID,
-			&group.IconURL, &group.MemberCount, &group.LastMessageAt, &group.IsDeleted,
+			&group.IconURL, &group.MemberCount, &group.IsMember, &group.LastMessageAt, &group.IsDeleted,
 			&group.CreatedAt, &group.UpdatedAt, &group.ShortCode,
 		)
 		if err != nil {
@@ -182,6 +189,7 @@ func (api *API) GetCommunityGroupByShortCode(ctx context.Context, shortCode stri
         SELECT cg.id, cg.name, cg.description, cg.group_type, cg.destination_place_id, cg.destination_name,
                ST_AsText(cg.destination_location), cg.visibility, cg.creator_id, cg.icon_url,
                (SELECT COUNT(*)::int FROM group_memberships gm WHERE gm.group_id = cg.id) AS member_count,
+               false AS is_member,
                cg.last_message_at, cg.is_deleted, cg.created_at, cg.updated_at, cg.short_code
         FROM community_groups cg
         WHERE cg.short_code = $1 AND cg.is_deleted = FALSE
@@ -190,7 +198,7 @@ func (api *API) GetCommunityGroupByShortCode(ctx context.Context, shortCode stri
 	err := api.Deps.DB.Pool().QueryRow(ctx, query, shortCode).Scan(
 		&group.ID, &group.Name, &group.Description, &group.GroupType, &group.DestinationPlaceID,
 		&group.DestinationName, &group.DestinationLocation, &group.Visibility, &group.CreatorID,
-		&group.IconURL, &group.MemberCount, &group.LastMessageAt, &group.IsDeleted,
+		&group.IconURL, &group.MemberCount, &group.IsMember, &group.LastMessageAt, &group.IsDeleted,
 		&group.CreatedAt, &group.UpdatedAt, &group.ShortCode,
 	)
 	return group, err
@@ -293,4 +301,170 @@ func (api *API) InsertGroupMessage(ctx context.Context, message model.GroupMessa
     `, message.CreatedAt, message.GroupID)
 
 	return message, nil
+}
+
+// --- Group invitations ---
+
+func (api *API) CreateInvitation(ctx context.Context, groupID, invitedUserID, invitedBy uuid.UUID) (model.GroupInvitation, error) {
+	// Check invited user exists
+	var exists bool
+	err := api.Deps.DB.Pool().QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)`, invitedUserID).Scan(&exists)
+	if err != nil || !exists {
+		return model.GroupInvitation{}, fmt.Errorf("invited user not found")
+	}
+	// Check not already a member
+	err = api.Deps.DB.Pool().QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM group_memberships WHERE group_id = $1 AND user_id = $2)`, groupID, invitedUserID).Scan(&exists)
+	if err != nil {
+		return model.GroupInvitation{}, err
+	}
+	if exists {
+		return model.GroupInvitation{}, fmt.Errorf("user is already a member")
+	}
+	// Check no pending invite
+	err = api.Deps.DB.Pool().QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM group_invitations WHERE group_id = $1 AND invited_user_id = $2 AND status = 'pending')`, groupID, invitedUserID).Scan(&exists)
+	if err != nil {
+		return model.GroupInvitation{}, err
+	}
+	if exists {
+		return model.GroupInvitation{}, fmt.Errorf("user already has a pending invitation")
+	}
+
+	inv := model.GroupInvitation{
+		ID:            uuid.New(),
+		GroupID:       groupID,
+		InvitedUserID: invitedUserID,
+		InvitedBy:     &invitedBy,
+		Status:        "pending",
+		CreatedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
+	}
+	_, err = api.Deps.DB.Pool().Exec(ctx, `
+        INSERT INTO group_invitations (id, group_id, invited_user_id, invited_by, status, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `, inv.ID, inv.GroupID, inv.InvitedUserID, inv.InvitedBy, inv.Status, inv.CreatedAt, inv.UpdatedAt)
+	if err != nil {
+		return model.GroupInvitation{}, fmt.Errorf("inserting invitation: %w", err)
+	}
+	return inv, nil
+}
+
+func (api *API) ListInvitationsByGroup(ctx context.Context, groupID uuid.UUID) ([]model.GroupInvitation, error) {
+	query := `
+        SELECT gi.id, gi.group_id, gi.invited_user_id, gi.invited_by, gi.status, gi.created_at, gi.updated_at,
+               u.email AS invited_user_email
+        FROM group_invitations gi
+        LEFT JOIN users u ON u.id = gi.invited_user_id
+        WHERE gi.group_id = $1 AND gi.status = 'pending'
+        ORDER BY gi.created_at DESC
+    `
+	rows, err := api.Deps.DB.Pool().Query(ctx, query, groupID)
+	if err != nil {
+		return nil, fmt.Errorf("querying invitations: %w", err)
+	}
+	defer rows.Close()
+
+	var list []model.GroupInvitation
+	for rows.Next() {
+		var inv model.GroupInvitation
+		var email *string
+		err := rows.Scan(&inv.ID, &inv.GroupID, &inv.InvitedUserID, &inv.InvitedBy, &inv.Status, &inv.CreatedAt, &inv.UpdatedAt, &email)
+		if err != nil {
+			return nil, fmt.Errorf("scanning invitation: %w", err)
+		}
+		inv.InvitedUserEmail = email
+		list = append(list, inv)
+	}
+	return list, nil
+}
+
+func (api *API) ListInvitationsForUser(ctx context.Context, userID uuid.UUID) ([]model.GroupInvitation, error) {
+	query := `
+        SELECT gi.id, gi.group_id, gi.invited_user_id, gi.invited_by, gi.status, gi.created_at, gi.updated_at,
+               cg.name AS group_name,
+               u.username AS invited_by_name
+        FROM group_invitations gi
+        JOIN community_groups cg ON cg.id = gi.group_id
+        LEFT JOIN users u ON u.id = gi.invited_by
+        WHERE gi.invited_user_id = $1 AND gi.status = 'pending'
+        ORDER BY gi.created_at DESC
+    `
+	rows, err := api.Deps.DB.Pool().Query(ctx, query, userID)
+	if err != nil {
+		return nil, fmt.Errorf("querying invitations: %w", err)
+	}
+	defer rows.Close()
+
+	var list []model.GroupInvitation
+	for rows.Next() {
+		var inv model.GroupInvitation
+		var groupName string
+		var invitedByName *string
+		err := rows.Scan(&inv.ID, &inv.GroupID, &inv.InvitedUserID, &inv.InvitedBy, &inv.Status, &inv.CreatedAt, &inv.UpdatedAt, &groupName, &invitedByName)
+		if err != nil {
+			return nil, fmt.Errorf("scanning invitation: %w", err)
+		}
+		inv.GroupName = &groupName
+		inv.InvitedByName = invitedByName
+		list = append(list, inv)
+	}
+	return list, nil
+}
+
+func (api *API) GetInvitationByID(ctx context.Context, id uuid.UUID) (model.GroupInvitation, error) {
+	var inv model.GroupInvitation
+	err := api.Deps.DB.Pool().QueryRow(ctx, `
+        SELECT id, group_id, invited_user_id, invited_by, status, created_at, updated_at
+        FROM group_invitations WHERE id = $1
+    `, id).Scan(&inv.ID, &inv.GroupID, &inv.InvitedUserID, &inv.InvitedBy, &inv.Status, &inv.CreatedAt, &inv.UpdatedAt)
+	if err != nil {
+		return model.GroupInvitation{}, err
+	}
+	return inv, nil
+}
+
+func (api *API) AcceptInvitation(ctx context.Context, invitationID, userID uuid.UUID) error {
+	inv, err := api.GetInvitationByID(ctx, invitationID)
+	if err != nil {
+		return err
+	}
+	if inv.InvitedUserID != userID {
+		return fmt.Errorf("invitation is not for this user")
+	}
+	if inv.Status != "pending" {
+		return fmt.Errorf("invitation is no longer pending")
+	}
+
+	return api.Deps.DB.RunInTx(ctx, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `
+            INSERT INTO group_memberships (group_id, user_id, role, joined_at, updated_at)
+            VALUES ($1, $2, 'member', NOW(), NOW())
+        `, inv.GroupID, userID)
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `UPDATE group_invitations SET status = 'accepted', updated_at = NOW() WHERE id = $1`, invitationID)
+		return err
+	})
+}
+
+func (api *API) DeclineInvitation(ctx context.Context, invitationID, userID uuid.UUID) error {
+	inv, err := api.GetInvitationByID(ctx, invitationID)
+	if err != nil {
+		return err
+	}
+	if inv.InvitedUserID != userID {
+		return fmt.Errorf("invitation is not for this user")
+	}
+	if inv.Status != "pending" {
+		return fmt.Errorf("invitation is no longer pending")
+	}
+	_, err = api.Deps.DB.Pool().Exec(ctx, `UPDATE group_invitations SET status = 'declined', updated_at = NOW() WHERE id = $1`, invitationID)
+	return err
+}
+
+// IsUserMemberOfGroup returns true if the user is in the group (any role).
+func (api *API) IsUserMemberOfGroup(ctx context.Context, groupID, userID uuid.UUID) (bool, error) {
+	var exists bool
+	err := api.Deps.DB.Pool().QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM group_memberships WHERE group_id = $1 AND user_id = $2)`, groupID, userID).Scan(&exists)
+	return exists, err
 }

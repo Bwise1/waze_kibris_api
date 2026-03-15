@@ -52,22 +52,22 @@ func (api *API) GroupRoutes() chi.Router {
 		// Response: Success/Failure message
 		r.Method(http.MethodDelete, "/{groupID}/members/{userID}", Handler(api.placeHolderHandler))
 		// Invite a user to the group - Requires Admin/Member (configurable)
-		// Request Body: { "user_id": "..." }
+		// Request Body: { "invited_user_id": "uuid" } or { "invited_user_email": "email" }
 		// Response: Invitation details or Success/Failure
-		r.Method(http.MethodPost, "/{groupID}/invitations", Handler(api.placeHolderHandler))
-		// List pending invitations for the group - Requires Admin role
+		r.Method(http.MethodPost, "/{groupID}/invitations", Handler(api.CreateInvitationHandler))
+		// List pending invitations for the group - Requires member
 		// Response: List of pending invitations
-		r.Method(http.MethodGet, "/{groupID}/invitations", Handler(api.placeHolderHandler))
+		r.Method(http.MethodGet, "/{groupID}/invitations", Handler(api.ListInvitationsByGroupHandler))
 		// User actions on invitations (could be top-level or user-scoped)
 		// Accept an invitation
 		// Response: Success/Failure (results in membership creation)
-		r.Method(http.MethodPost, "/invitations/{invitationID}/accept", Handler(api.placeHolderHandler)) // Assumes a top-level /invitations route exists
+		r.Method(http.MethodPost, "/invitations/{invitationID}/accept", Handler(api.AcceptInvitationHandler))
 		// Decline an invitation
 		// Response: Success/Failure
-		r.Method(http.MethodPost, "/invitations/{invitationID}/decline", Handler(api.placeHolderHandler)) // Assumes a top-level /invitations route exists
+		r.Method(http.MethodPost, "/invitations/{invitationID}/decline", Handler(api.DeclineInvitationHandler))
 		// List user's pending invitations
 		// Response: List of invitations for the logged-in user
-		r.Method(http.MethodGet, "/users/me/invitations", Handler(api.placeHolderHandler)) // Or similar user-scoped route
+		r.Method(http.MethodGet, "/users/me/invitations", Handler(api.ListMyInvitationsHandler))
 		// Send a message to the group - Requires Member role
 		// Request Body: { "content": "...", "message_type": "text/location/report_link", "attachment_url": "..." }
 		// Response: The created message details
@@ -232,8 +232,12 @@ func (api *API) CreateCommunityGroupHandler(_ http.ResponseWriter, r *http.Reque
 func (api *API) SearchForListOfGroupsHandler(_ http.ResponseWriter, r *http.Request) *ServerResponse {
 	tc := r.Context().Value(values.ContextTracingKey).(tracing.Context)
 
-	log.Println("here in handler")
-	groups, status, message, err := api.SearchCommunityGroupsHelper(r.Context())
+	userID, _ := util.GetUserIDFromContext(r.Context()) // optional: list still works without auth
+	var userIDPtr *uuid.UUID
+	if userID != uuid.Nil {
+		userIDPtr = &userID
+	}
+	groups, status, message, err := api.SearchCommunityGroupsHelper(r.Context(), userIDPtr)
 	if err != nil {
 		return respondWithError(err, "unable to get groups", values.Failed, &tc)
 	}
@@ -294,5 +298,176 @@ func (api *API) GetGroupByIDHandler(w http.ResponseWriter, r *http.Request) *Ser
 		Status:     values.Success,
 		StatusCode: util.StatusCode(values.Success),
 		Data:       group,
+	}
+}
+
+// CreateInvitationRequest body: invited_user_id (UUID) or invited_user_email (string).
+type CreateInvitationRequest struct {
+	InvitedUserID    *string `json:"invited_user_id"`
+	InvitedUserEmail *string `json:"invited_user_email"`
+}
+
+func (api *API) CreateInvitationHandler(_ http.ResponseWriter, r *http.Request) *ServerResponse {
+	tc := r.Context().Value(values.ContextTracingKey).(tracing.Context)
+	groupIDStr := chi.URLParam(r, "groupID")
+	groupID, err := uuid.Parse(groupIDStr)
+	if err != nil {
+		return respondWithError(err, "invalid group ID format", values.BadRequestBody, &tc)
+	}
+
+	callerID, err := util.GetUserIDFromContext(r.Context())
+	if err != nil {
+		return respondWithError(err, "unable to get user ID from context", values.NotAuthorised, &tc)
+	}
+
+	ok, err := api.IsUserMemberOfGroup(r.Context(), groupID, callerID)
+	if err != nil {
+		return respondWithError(err, "failed to check membership", values.Failed, &tc)
+	}
+	if !ok {
+		return respondWithError(nil, "you must be a member to invite others", values.NotAuthorised, &tc)
+	}
+
+	var req CreateInvitationRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		return respondWithError(err, "invalid request payload", values.BadRequestBody, &tc)
+	}
+
+	var invitedUserID uuid.UUID
+	if req.InvitedUserID != nil && *req.InvitedUserID != "" {
+		invitedUserID, err = uuid.Parse(*req.InvitedUserID)
+		if err != nil {
+			return respondWithError(err, "invalid invited_user_id", values.BadRequestBody, &tc)
+		}
+	} else if req.InvitedUserEmail != nil && *req.InvitedUserEmail != "" {
+		user, err := api.GetUserByEmail(r.Context(), *req.InvitedUserEmail)
+		if err != nil {
+			return respondWithError(err, "user not found for email", values.Failed, &tc)
+		}
+		invitedUserID = user.ID
+	} else {
+		return respondWithError(nil, "provide invited_user_id or invited_user_email", values.BadRequestBody, &tc)
+	}
+
+	inv, err := api.CreateInvitation(r.Context(), groupID, invitedUserID, callerID)
+	if err != nil {
+		return respondWithError(err, err.Error(), values.Failed, &tc)
+	}
+
+	return &ServerResponse{
+		Message:    "Invitation created",
+		Status:     values.Success,
+		StatusCode: util.StatusCode(values.Success),
+		Data:       inv,
+	}
+}
+
+func (api *API) ListInvitationsByGroupHandler(_ http.ResponseWriter, r *http.Request) *ServerResponse {
+	tc := r.Context().Value(values.ContextTracingKey).(tracing.Context)
+	groupIDStr := chi.URLParam(r, "groupID")
+	groupID, err := uuid.Parse(groupIDStr)
+	if err != nil {
+		return respondWithError(err, "invalid group ID format", values.BadRequestBody, &tc)
+	}
+
+	callerID, err := util.GetUserIDFromContext(r.Context())
+	if err != nil {
+		return respondWithError(err, "unable to get user ID from context", values.NotAuthorised, &tc)
+	}
+
+	ok, err := api.IsUserMemberOfGroup(r.Context(), groupID, callerID)
+	if err != nil {
+		return respondWithError(err, "failed to check membership", values.Failed, &tc)
+	}
+	if !ok {
+		return respondWithError(nil, "must be a member to list invitations", values.NotAuthorised, &tc)
+	}
+
+	list, err := api.ListInvitationsByGroup(r.Context(), groupID)
+	if err != nil {
+		return respondWithError(err, "failed to list invitations", values.Failed, &tc)
+	}
+	if list == nil {
+		list = []model.GroupInvitation{}
+	}
+
+	return &ServerResponse{
+		Message:    "Invitations retrieved",
+		Status:     values.Success,
+		StatusCode: util.StatusCode(values.Success),
+		Data:       list,
+	}
+}
+
+func (api *API) ListMyInvitationsHandler(_ http.ResponseWriter, r *http.Request) *ServerResponse {
+	tc := r.Context().Value(values.ContextTracingKey).(tracing.Context)
+	userID, err := util.GetUserIDFromContext(r.Context())
+	if err != nil {
+		return respondWithError(err, "unable to get user ID from context", values.NotAuthorised, &tc)
+	}
+
+	list, err := api.ListInvitationsForUser(r.Context(), userID)
+	if err != nil {
+		return respondWithError(err, "failed to list invitations", values.Failed, &tc)
+	}
+	if list == nil {
+		list = []model.GroupInvitation{}
+	}
+
+	return &ServerResponse{
+		Message:    "Invitations retrieved",
+		Status:     values.Success,
+		StatusCode: util.StatusCode(values.Success),
+		Data:       list,
+	}
+}
+
+func (api *API) AcceptInvitationHandler(_ http.ResponseWriter, r *http.Request) *ServerResponse {
+	tc := r.Context().Value(values.ContextTracingKey).(tracing.Context)
+	invitationIDStr := chi.URLParam(r, "invitationID")
+	invitationID, err := uuid.Parse(invitationIDStr)
+	if err != nil {
+		return respondWithError(err, "invalid invitation ID format", values.BadRequestBody, &tc)
+	}
+
+	userID, err := util.GetUserIDFromContext(r.Context())
+	if err != nil {
+		return respondWithError(err, "unable to get user ID from context", values.NotAuthorised, &tc)
+	}
+
+	err = api.AcceptInvitation(r.Context(), invitationID, userID)
+	if err != nil {
+		return respondWithError(err, err.Error(), values.Failed, &tc)
+	}
+
+	return &ServerResponse{
+		Message:    "Invitation accepted",
+		Status:     values.Success,
+		StatusCode: util.StatusCode(values.Success),
+	}
+}
+
+func (api *API) DeclineInvitationHandler(_ http.ResponseWriter, r *http.Request) *ServerResponse {
+	tc := r.Context().Value(values.ContextTracingKey).(tracing.Context)
+	invitationIDStr := chi.URLParam(r, "invitationID")
+	invitationID, err := uuid.Parse(invitationIDStr)
+	if err != nil {
+		return respondWithError(err, "invalid invitation ID format", values.BadRequestBody, &tc)
+	}
+
+	userID, err := util.GetUserIDFromContext(r.Context())
+	if err != nil {
+		return respondWithError(err, "unable to get user ID from context", values.NotAuthorised, &tc)
+	}
+
+	err = api.DeclineInvitation(r.Context(), invitationID, userID)
+	if err != nil {
+		return respondWithError(err, err.Error(), values.Failed, &tc)
+	}
+
+	return &ServerResponse{
+		Message:    "Invitation declined",
+		Status:     values.Success,
+		StatusCode: util.StatusCode(values.Success),
 	}
 }

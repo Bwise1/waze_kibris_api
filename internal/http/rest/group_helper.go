@@ -30,9 +30,9 @@ func (api *API) CreateGroupHelper(ctx context.Context, newGroup model.CommunityG
 	return model.CommunityGroup{}, values.Error, "Could not generate unique group code", nil
 }
 
-func (api *API) SearchCommunityGroupsHelper(ctx context.Context) ([]model.CommunityGroup, string, string, error) {
+func (api *API) SearchCommunityGroupsHelper(ctx context.Context, currentUserID *uuid.UUID) ([]model.CommunityGroup, string, string, error) {
 
-	groups, err := api.SearchCommunityGroup(ctx)
+	groups, err := api.SearchCommunityGroup(ctx, currentUserID)
 	if err != nil {
 		return []model.CommunityGroup{}, values.Error, "Failed to get groups", err
 	}

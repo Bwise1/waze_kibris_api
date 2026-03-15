@@ -2,11 +2,13 @@ package rest
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/bwise1/waze_kibris/internal/model"
 	"github.com/bwise1/waze_kibris/util"
 	"github.com/bwise1/waze_kibris/util/tracing"
 	"github.com/bwise1/waze_kibris/util/values"
+	"github.com/bwise1/waze_kibris/util/websockets"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -19,6 +21,7 @@ func (api *API) UserRoutes() chi.Router {
 		r.Method(http.MethodPut, "/profile", Handler(api.UpdateProfile))
 		r.Method(http.MethodPut, "/language", Handler(api.UpdateLanguage))
 		r.Method(http.MethodDelete, "/account", Handler(api.DeleteAccount))
+		r.Method(http.MethodGet, "/nearby-users", Handler(api.GetNearbyUsersHandler))
 	})
 
 	return mux
@@ -140,5 +143,50 @@ func (api *API) DeleteAccount(_ http.ResponseWriter, r *http.Request) *ServerRes
 		Message:    "Account deleted successfully",
 		Status:     values.Success,
 		StatusCode: util.StatusCode(values.Success),
+	}
+}
+
+const defaultNearbyRadiusM = 2000
+
+// GetNearbyUsersHandler returns connected users within radius of the given lat/lon.
+// GET /user/nearby-users?latitude=...&longitude=...&radius_m=... (radius_m optional, default 2000)
+func (api *API) GetNearbyUsersHandler(_ http.ResponseWriter, r *http.Request) *ServerResponse {
+	tc := r.Context().Value(values.ContextTracingKey).(tracing.Context)
+
+	userID, err := util.GetUserIDFromContext(r.Context())
+	if err != nil {
+		return respondWithError(err, "unable to get user ID from context", values.NotAuthorised, &tc)
+	}
+
+	latStr := r.URL.Query().Get("latitude")
+	lonStr := r.URL.Query().Get("longitude")
+	radiusStr := r.URL.Query().Get("radius_m")
+
+	lat, err := strconv.ParseFloat(latStr, 64)
+	if err != nil {
+		return respondWithError(err, "invalid latitude", values.BadRequestBody, &tc)
+	}
+	lon, err := strconv.ParseFloat(lonStr, 64)
+	if err != nil {
+		return respondWithError(err, "invalid longitude", values.BadRequestBody, &tc)
+	}
+	radiusM := float64(defaultNearbyRadiusM)
+	if radiusStr != "" {
+		radiusM, err = strconv.ParseFloat(radiusStr, 64)
+		if err != nil || radiusM <= 0 {
+			return respondWithError(nil, "invalid radius_m", values.BadRequestBody, &tc)
+		}
+	}
+
+	list := api.Deps.WebSocket.GetNearbyUsers(lat, lon, radiusM, userID.String())
+	if list == nil {
+		list = []websockets.NearbyUser{}
+	}
+
+	return &ServerResponse{
+		Message:    "Nearby users retrieved",
+		Status:     values.Success,
+		StatusCode: util.StatusCode(values.Success),
+		Data:       list,
 	}
 }
