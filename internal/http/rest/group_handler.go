@@ -180,9 +180,16 @@ func (api *API) SendGroupMessageHandler(w http.ResponseWriter, r *http.Request) 
 		return respondWithError(err, "Failed to send message", values.Failed, &tc)
 	}
 
-	// Broadcast the message via WebSockets
-	wsMsg, _ := json.Marshal(savedMsg)
-	api.Deps.WebSocket.BroadcastToGroup(groupID.String(), wsMsg)
+	// Broadcast the message via WebSockets (wrapper so client gets type + content)
+	msgJSON, _ := json.Marshal(savedMsg)
+	wrapper := map[string]interface{}{
+		"type":    "group_chat",
+		"content": string(msgJSON),
+		"user_id": savedMsg.UserID.String(),
+		"group_id": groupID.String(),
+	}
+	wrappedPayload, _ := json.Marshal(wrapper)
+	api.Deps.WebSocket.BroadcastToGroup(groupID.String(), wrappedPayload)
 
 	return &ServerResponse{
 		Message:    "Message sent successfully",
@@ -247,29 +254,18 @@ func (api *API) JoinGroupByShortCodeHandler(w http.ResponseWriter, r *http.Reque
 		return respondWithError(err, "Group not found", values.Failed, &tc)
 	}
 
-	// Determine membership status
-	status := "active"
-	if group.Visibility == "private" {
-		status = "pending"
-	}
-
 	// Insert membership (handle duplicate gracefully)
 	_, err = api.Deps.DB.Pool().Exec(r.Context(), `
-        INSERT INTO group_memberships (group_id, user_id, role, status, joined_at, updated_at)
-        VALUES ($1, $2, 'member', $3, NOW(), NOW())
+        INSERT INTO group_memberships (group_id, user_id, role, joined_at, updated_at)
+        VALUES ($1, $2, 'member', NOW(), NOW())
         ON CONFLICT (group_id, user_id) DO NOTHING
-    `, group.ID, userID, status)
+    `, group.ID, userID)
 	if err != nil {
 		return respondWithError(err, "Failed to join group", values.Failed, &tc)
 	}
 
-	message := "Joined group successfully"
-	if status == "pending" {
-		message = "Join request sent, awaiting admin approval"
-	}
-
 	return &ServerResponse{
-		Message:    message,
+		Message:    "Joined group successfully",
 		Status:     values.Success,
 		StatusCode: util.StatusCode(values.Success),
 	}

@@ -144,33 +144,33 @@ func (api *API) UpdateCommunityGroup(ctx context.Context, group model.CommunityG
 }
 
 func (api *API) SearchCommunityGroup(ctx context.Context) ([]model.CommunityGroup, error) {
-
 	query := `
-		SELECT id, name, creator_id, short_code
-		FROM community_groups
-	`
-
-	rows, err := api.DB.Query(ctx, query)
+        SELECT id, name, description, group_type, destination_place_id, destination_name,
+               ST_AsText(destination_location), visibility, creator_id, icon_url, member_count,
+               last_message_at, is_deleted, created_at, updated_at, short_code
+        FROM community_groups
+        WHERE is_deleted = FALSE
+    `
+	rows, err := api.Deps.DB.Pool().Query(ctx, query)
 	if err != nil {
-		return nil, fmt.Errorf("querying nearby reports: %w", err)
+		return nil, fmt.Errorf("querying community groups: %w", err)
 	}
 	defer rows.Close()
 
 	var groups []model.CommunityGroup
-
 	for rows.Next() {
 		var group model.CommunityGroup
 		err := rows.Scan(
-			&group.ID, &group.Name, &group.CreatorID, &group.ShortCode,
+			&group.ID, &group.Name, &group.Description, &group.GroupType, &group.DestinationPlaceID,
+			&group.DestinationName, &group.DestinationLocation, &group.Visibility, &group.CreatorID,
+			&group.IconURL, &group.MemberCount, &group.LastMessageAt, &group.IsDeleted,
+			&group.CreatedAt, &group.UpdatedAt, &group.ShortCode,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("scanning groups: %w", err)
 		}
-
-		// report.Distance = distance // Add distance to report model
 		groups = append(groups, group)
 	}
-
 	return groups, nil
 }
 
