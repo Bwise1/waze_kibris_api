@@ -99,11 +99,12 @@ func (api *API) CreateCommunityGroup(ctx context.Context, group model.CommunityG
 
 func (api *API) GetCommunityGroupByID(ctx context.Context, groupID uuid.UUID) (model.CommunityGroup, error) {
 	query := `
-        SELECT id, name, description, group_type, destination_place_id, destination_name,
-               ST_AsText(destination_location), visibility, creator_id, icon_url, member_count,
-               last_message_at, is_deleted, created_at, updated_at,short_code
-        FROM community_groups
-        WHERE id = $1 AND is_deleted = FALSE
+        SELECT cg.id, cg.name, cg.description, cg.group_type, cg.destination_place_id, cg.destination_name,
+               ST_AsText(cg.destination_location), cg.visibility, cg.creator_id, cg.icon_url,
+               (SELECT COUNT(*)::int FROM group_memberships gm WHERE gm.group_id = cg.id) AS member_count,
+               cg.last_message_at, cg.is_deleted, cg.created_at, cg.updated_at, cg.short_code
+        FROM community_groups cg
+        WHERE cg.id = $1 AND cg.is_deleted = FALSE
     `
 
 	var group model.CommunityGroup
@@ -145,11 +146,13 @@ func (api *API) UpdateCommunityGroup(ctx context.Context, group model.CommunityG
 
 func (api *API) SearchCommunityGroup(ctx context.Context) ([]model.CommunityGroup, error) {
 	query := `
-        SELECT id, name, description, group_type, destination_place_id, destination_name,
-               ST_AsText(destination_location), visibility, creator_id, icon_url, member_count,
-               last_message_at, is_deleted, created_at, updated_at, short_code
-        FROM community_groups
-        WHERE is_deleted = FALSE
+        SELECT cg.id, cg.name, cg.description, cg.group_type, cg.destination_place_id, cg.destination_name,
+               ST_AsText(cg.destination_location), cg.visibility, cg.creator_id, cg.icon_url,
+               (SELECT COUNT(*)::int FROM group_memberships gm WHERE gm.group_id = cg.id) AS member_count,
+               cg.last_message_at, cg.is_deleted, cg.created_at, cg.updated_at, cg.short_code
+        FROM community_groups cg
+        WHERE cg.is_deleted = FALSE
+        ORDER BY cg.last_message_at DESC NULLS LAST, cg.created_at DESC
     `
 	rows, err := api.Deps.DB.Pool().Query(ctx, query)
 	if err != nil {
@@ -176,11 +179,12 @@ func (api *API) SearchCommunityGroup(ctx context.Context) ([]model.CommunityGrou
 
 func (api *API) GetCommunityGroupByShortCode(ctx context.Context, shortCode string) (model.CommunityGroup, error) {
 	query := `
-        SELECT id, name, description, group_type, destination_place_id, destination_name,
-               ST_AsText(destination_location), visibility, creator_id, icon_url, member_count,
-               last_message_at, is_deleted, created_at, updated_at, short_code
-        FROM community_groups
-        WHERE short_code = $1 AND is_deleted = FALSE
+        SELECT cg.id, cg.name, cg.description, cg.group_type, cg.destination_place_id, cg.destination_name,
+               ST_AsText(cg.destination_location), cg.visibility, cg.creator_id, cg.icon_url,
+               (SELECT COUNT(*)::int FROM group_memberships gm WHERE gm.group_id = cg.id) AS member_count,
+               cg.last_message_at, cg.is_deleted, cg.created_at, cg.updated_at, cg.short_code
+        FROM community_groups cg
+        WHERE cg.short_code = $1 AND cg.is_deleted = FALSE
     `
 	var group model.CommunityGroup
 	err := api.Deps.DB.Pool().QueryRow(ctx, query, shortCode).Scan(
