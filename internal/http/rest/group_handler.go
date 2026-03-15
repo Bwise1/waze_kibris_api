@@ -117,6 +117,10 @@ func (api *API) GetGroupMessagesHandler(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		return respondWithError(err, "failed to get group messages", values.Failed, &tc)
 	}
+	if messages == nil {
+		messages = []model.GroupMessage{}
+	}
+	log.Printf("GetGroupMessages: groupID=%s returned %d messages", groupID.String(), len(messages))
 
 	return &ServerResponse{
 		Message:    "Messages retrieved",
@@ -179,6 +183,7 @@ func (api *API) SendGroupMessageHandler(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		return respondWithError(err, "Failed to send message", values.Failed, &tc)
 	}
+	log.Printf("Group message saved: id=%s groupID=%s", savedMsg.ID, groupID)
 
 	// Broadcast the message via WebSockets (wrapper so client gets type + content)
 	msgJSON, _ := json.Marshal(savedMsg)

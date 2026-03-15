@@ -235,7 +235,7 @@ func (api *API) LeaveCommunityGroup(ctx context.Context, groupID uuid.UUID, user
 
 func (api *API) GetGroupMembers(ctx context.Context, groupID uuid.UUID) ([]model.GroupMembership, error) {
 	query := `
-        SELECT id, group_id, user_id, role, status, joined_at, updated_at
+        SELECT id, group_id, user_id, role, 'active' AS status, joined_at, updated_at
         FROM group_memberships
         WHERE group_id = $1
     `
