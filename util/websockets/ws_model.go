@@ -8,11 +8,13 @@ import (
 
 // Message types
 const (
-	MsgTypeSubscribe     = "subscribe"
-	MsgTypeReportUpdate  = "report_update"
-	MsgTypeDirectMessage = "direct_message"
-	MsgTypeVoteUpdate    = "vote_update"
-	MsgTypeCommentUpdate = "comment_update"
+	MsgTypeSubscribe           = "subscribe"
+	MsgTypeReportUpdate        = "report_update"
+	MsgTypeDirectMessage       = "direct_message"
+	MsgTypeVoteUpdate          = "vote_update"
+	MsgTypeCommentUpdate       = "comment_update"
+	MsgTypeGroupChat           = "group_chat"
+	MsgTypeGroupLocationUpdate = "group_location_update"
 )
 
 // ReportUpdatePayload is sent in Message.Content for report_update events.
@@ -30,10 +32,11 @@ type ReportUpdatePayload struct {
 
 // Client represents a connected WebSocket user
 type Client struct {
-	Conn      *websocket.Conn
-	UserID    string
-	Latitude  float64
-	Longitude float64
+	Conn           *websocket.Conn
+	UserID         string
+	Latitude       float64
+	Longitude      float64
+	ActiveGroupIDs []string
 }
 
 type WebSocketManager struct {
@@ -53,10 +56,12 @@ type DirectMessage struct {
 
 // Message struct for incoming WebSocket messages
 type Message struct {
-	Type      string  `json:"type"`
-	UserID    string  `json:"user_id"`
-	Latitude  float64 `json:"latitude,omitempty"`
-	Longitude float64 `json:"longitude,omitempty"`
-	Content   string  `json:"content,omitempty"`
-	Receiver  string  `json:"receiver,omitempty"`
+	Type           string   `json:"type"`
+	UserID         string   `json:"user_id"`
+	Latitude       float64  `json:"latitude,omitempty"`
+	Longitude      float64  `json:"longitude,omitempty"`
+	Content        string   `json:"content,omitempty"`
+	Receiver       string   `json:"receiver,omitempty"`
+	GroupID        string   `json:"group_id,omitempty"`
+	ActiveGroupIDs []string `json:"active_group_ids,omitempty"`
 }

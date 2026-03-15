@@ -191,3 +191,97 @@ func (api *API) GetCommunityGroupByShortCode(ctx context.Context, shortCode stri
 	)
 	return group, err
 }
+
+func (api *API) GetGroupMessages(ctx context.Context, groupID uuid.UUID, limit int) ([]model.GroupMessage, error) {
+	query := `
+        SELECT id, group_id, sender_id, message_type, content, is_deleted, created_at, updated_at
+        FROM group_messages
+        WHERE group_id = $1 AND is_deleted = FALSE
+        ORDER BY created_at DESC
+        LIMIT $2
+    `
+	rows, err := api.Deps.DB.Pool().Query(ctx, query, groupID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("querying group messages: %w", err)
+	}
+	defer rows.Close()
+
+	var messages []model.GroupMessage
+	for rows.Next() {
+		var msg model.GroupMessage
+		err := rows.Scan(
+			&msg.ID, &msg.GroupID, &msg.UserID, &msg.MessageType,
+			&msg.Content, &msg.IsDeleted, &msg.CreatedAt, &msg.UpdatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("scanning group message: %w", err)
+		}
+		messages = append(messages, msg)
+	}
+
+	// Reverse so oldest is first, if preferred by client
+	// Or leave DESC so newest is first.
+	return messages, nil
+}
+
+func (api *API) LeaveCommunityGroup(ctx context.Context, groupID uuid.UUID, userID uuid.UUID) error {
+	query := `
+        DELETE FROM group_memberships
+        WHERE group_id = $1 AND user_id = $2
+    `
+	_, err := api.Deps.DB.Pool().Exec(ctx, query, groupID, userID)
+	return err
+}
+
+func (api *API) GetGroupMembers(ctx context.Context, groupID uuid.UUID) ([]model.GroupMembership, error) {
+	query := `
+        SELECT id, group_id, user_id, role, status, joined_at, updated_at
+        FROM group_memberships
+        WHERE group_id = $1
+    `
+	rows, err := api.Deps.DB.Pool().Query(ctx, query, groupID)
+	if err != nil {
+		return nil, fmt.Errorf("querying group members: %w", err)
+	}
+	defer rows.Close()
+
+	var members []model.GroupMembership
+	for rows.Next() {
+		var m model.GroupMembership
+		err := rows.Scan(
+			&m.ID, &m.GroupID, &m.UserID, &m.Role, &m.Status, &m.JoinedAt, &m.UpdatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("scanning group member: %w", err)
+		}
+		members = append(members, m)
+	}
+	return members, nil
+}
+
+func (api *API) InsertGroupMessage(ctx context.Context, message model.GroupMessage) (model.GroupMessage, error) {
+	message.ID = uuid.New()
+	message.CreatedAt = time.Now()
+	message.UpdatedAt = time.Now()
+
+	query := `
+        INSERT INTO group_messages (id, group_id, sender_id, message_type, content, is_deleted, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING id, created_at, updated_at
+    `
+	err := api.Deps.DB.Pool().QueryRow(ctx, query,
+		message.ID, message.GroupID, message.UserID, message.MessageType,
+		message.Content, message.IsDeleted, message.CreatedAt, message.UpdatedAt,
+	).Scan(&message.ID, &message.CreatedAt, &message.UpdatedAt)
+
+	if err != nil {
+		return message, fmt.Errorf("inserting group message: %w", err)
+	}
+
+	// Also update last_message_at in the group
+	_, _ = api.Deps.DB.Pool().Exec(ctx, `
+        UPDATE community_groups SET last_message_at = $1 WHERE id = $2
+    `, message.CreatedAt, message.GroupID)
+
+	return message, nil
+}

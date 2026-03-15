@@ -25,3 +25,27 @@ type CommunityGroup struct {
 	CreatedAt           time.Time  `json:"created_at"`
 	UpdatedAt           time.Time  `json:"updated_at"`
 }
+
+type GroupMembership struct {
+	ID        uuid.UUID  `json:"id"`
+	GroupID   uuid.UUID  `json:"group_id"`
+	UserID    uuid.UUID  `json:"user_id"`
+	Role      string     `json:"role"`   // "admin" or "member"
+	Status    string     `json:"status"` // "active", "pending", or "invited"
+	JoinedAt  time.Time  `json:"joined_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
+	IsDeleted bool       `json:"is_deleted"`
+	DeletedAt *time.Time `json:"deleted_at,omitempty"`
+}
+
+type GroupMessage struct {
+	ID          uuid.UUID  `json:"id"`
+	GroupID     uuid.UUID  `json:"group_id"`
+	UserID      uuid.UUID  `json:"user_id"`
+	MessageType string     `json:"message_type"` // "text", "location", "system"
+	Content     string     `json:"content"`
+	IsDeleted   bool       `json:"is_deleted"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+	DeletedAt   *time.Time `json:"deleted_at,omitempty"`
+}

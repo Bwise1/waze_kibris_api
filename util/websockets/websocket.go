@@ -181,6 +181,9 @@ func (manager *WebSocketManager) HandleConnections(w http.ResponseWriter, r *htt
 			client.UserID = message.UserID
 			client.Latitude = message.Latitude
 			client.Longitude = message.Longitude
+			if message.ActiveGroupIDs != nil {
+				client.ActiveGroupIDs = message.ActiveGroupIDs
+			}
 
 		case MsgTypeReportUpdate:
 			manager.broadcast <- msg
@@ -191,6 +194,11 @@ func (manager *WebSocketManager) HandleConnections(w http.ResponseWriter, r *htt
 				Message:    message.Content,
 			}
 			manager.send <- directMsg
+
+		case MsgTypeGroupChat, MsgTypeGroupLocationUpdate:
+			if message.GroupID != "" {
+				manager.BroadcastToGroup(message.GroupID, msg)
+			}
 		}
 	}
 }
@@ -223,4 +231,22 @@ func isNearby(userLat, userLon, reportLat, reportLon, radius float64) bool {
 
 	distance := earthRadius * c
 	return distance <= radius
+}
+
+// BroadcastToGroup sends a message to all connected clients who have groupID in their ActiveGroupIDs
+func (manager *WebSocketManager) BroadcastToGroup(groupID string, message []byte) {
+	manager.mu.Lock()
+	defer manager.mu.Unlock()
+
+	for _, client := range manager.clients {
+		for _, activeGrpID := range client.ActiveGroupIDs {
+			if activeGrpID == groupID {
+				if err := client.Conn.WriteMessage(websocket.TextMessage, message); err != nil {
+					log.Printf("Error broadcasting to group %s for client %s: %v", groupID, client.UserID, err)
+					// We don't remove the client here, let the unregister handle it during normal read loop if dead
+				}
+				break
+			}
+		}
+	}
 }
