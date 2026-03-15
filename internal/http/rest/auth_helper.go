@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math/rand"
 	"strings"
 	"time"
 
@@ -17,6 +18,13 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"google.golang.org/api/idtoken"
 )
+
+// Default profile icon filenames (bundled in app assets). One is randomly assigned on registration.
+var defaultProfileIcons = []string{
+	"buddy_buggy.png", "camper.png", "chill_buddy.png", "chill_wheels.png",
+	"lone_rider.png", "peepers.png", "smooth_operator.png", "solo_driver.png",
+	"the_roadtripper.png",
+}
 
 // func GenerateTokenPair(userID uuid.UUID) (*TokenPair, error)
 // func ValidateToken(token string) (*Claims, error)
@@ -96,6 +104,9 @@ func (api *API) CreateNewUser(req model.RegisterRequest) (model.VerifyCodeRespon
 		return model.VerifyCodeResponse{}, values.Conflict, "Email already exists", nil
 	}
 
+	// Assign a random default profile icon for new users.
+	chosenIcon := defaultProfileIcons[rand.Intn(len(defaultProfileIcons))]
+
 	// Generate a pseudonymous, driver-themed display username for new users.
 	const maxAttempts = 5
 	var user model.User
@@ -106,6 +117,7 @@ func (api *API) CreateNewUser(req model.RegisterRequest) (model.VerifyCodeRespon
 			Email:        req.Email,
 			AuthProvider: "email",
 			Username:     &displayName,
+			ProfileIcon:  &chosenIcon,
 		}
 
 		err = api.CreateNewUserRepo(ctx, user)
@@ -264,6 +276,7 @@ func (api *API) VerifyCodeHelper(req model.VerifyCodeRequest) (model.LoginRespon
 			LastName:          user.LastName,
 			Username:          user.Username,
 			Email:             user.Email,
+			ProfileIcon:       user.ProfileIcon,
 			IsVerified:        user.IsVerified,
 			PreferredLanguage: user.PreferredLanguage,
 		},
@@ -378,6 +391,7 @@ func (api *API) generateAndStoreTokens(user model.User) (model.LoginResponse, st
 			LastName:          user.LastName,
 			Username:          user.Username,
 			Email:             user.Email,
+			ProfileIcon:       user.ProfileIcon,
 			IsVerified:        user.IsVerified,
 			PreferredLanguage: user.PreferredLanguage,
 		},
@@ -425,6 +439,7 @@ func (api *API) GoogleLogin(idToken string) (model.LoginResponse, string, string
 			// Check if the error is specifically "no rows found"
 			if errors.Is(err, pgx.ErrNoRows) || errors.Is(err, sql.ErrNoRows) || err.Error() == "no rows in result set" {
 				// No user exists; register a new user
+				googleIcon := defaultProfileIcons[rand.Intn(len(defaultProfileIcons))]
 				newUser := model.User{
 					ID:           util.GenerateUUID(),
 					Email:        email,
@@ -432,6 +447,7 @@ func (api *API) GoogleLogin(idToken string) (model.LoginResponse, string, string
 					LastName:     &userInfo.LastName,
 					AuthProvider: "google",
 					IsVerified:   true, // Google has verified the email
+					ProfileIcon:  &googleIcon,
 				}
 				newGUser, err := api.CreateGoogleUserRepo(ctx, newUser)
 				if err != nil {

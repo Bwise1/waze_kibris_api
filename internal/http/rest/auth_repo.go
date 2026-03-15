@@ -34,10 +34,11 @@ func (api *API) CreateNewUserRepo(ctx context.Context, req model.User) error {
             id,
             email,
             auth_provider,
-            username
-        ) VALUES ($1, $2, $3, $4)
+            username,
+            profile_icon
+        ) VALUES ($1, $2, $3, $4, $5)
     `
-	_, err := api.Deps.DB.Pool().Exec(ctx, stmt, req.ID, req.Email, req.AuthProvider, req.Username)
+	_, err := api.Deps.DB.Pool().Exec(ctx, stmt, req.ID, req.Email, req.AuthProvider, req.Username, req.ProfileIcon)
 	if err != nil {
 		log.Println("error creating new user", err)
 		return err
@@ -55,9 +56,10 @@ func (api *API) CreateGoogleUserRepo(ctx context.Context, req model.User) (model
             firstname,
             lastname,
             auth_provider,
-            is_verified
-        ) VALUES ($1, $2, $3, $4, $5, $6)
-        RETURNING id, email, firstname, lastname, auth_provider, is_verified, preferred_language
+            is_verified,
+            profile_icon
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING id, email, firstname, lastname, auth_provider, is_verified, preferred_language, profile_icon
     `
 
 	var user model.User
@@ -69,6 +71,7 @@ func (api *API) CreateGoogleUserRepo(ctx context.Context, req model.User) (model
 		req.LastName,
 		req.AuthProvider,
 		req.IsVerified,
+		req.ProfileIcon,
 	).Scan(
 		&user.ID,
 		&user.Email,
@@ -77,6 +80,7 @@ func (api *API) CreateGoogleUserRepo(ctx context.Context, req model.User) (model
 		&user.AuthProvider,
 		&user.IsVerified,
 		&user.PreferredLanguage,
+		&user.ProfileIcon,
 	)
 	if err != nil {
 		log.Println("error creating new Google user", err)
@@ -104,7 +108,7 @@ func (api *API) GetUserByEmail(ctx context.Context, email string) (model.User, e
 
 func (api *API) GetUserByID(ctx context.Context, userID string) (model.User, error) {
 	var user model.User
-	stmt := `SELECT id, email, firstname, lastname, username, auth_provider, is_verified, preferred_language, created_at, updated_at FROM users WHERE id = $1`
+	stmt := `SELECT id, email, firstname, lastname, username, auth_provider, is_verified, preferred_language, created_at, updated_at, profile_icon FROM users WHERE id = $1`
 
 	err := api.Deps.DB.Pool().QueryRow(ctx, stmt, userID).Scan(
 		&user.ID,
@@ -117,6 +121,7 @@ func (api *API) GetUserByID(ctx context.Context, userID string) (model.User, err
 		&user.PreferredLanguage,
 		&user.CreatedAt,
 		&user.UpdatedAt,
+		&user.ProfileIcon,
 	)
 	if err != nil {
 		log.Println("error getting user by ID", err)

@@ -30,10 +30,10 @@ func (api *API) GetUserProfileByID(ctx context.Context, id string) (model.User, 
 func (api *API) UpdateUserRepo(ctx context.Context, user model.User) error {
 	stmt := `
         UPDATE users
-        SET firstname = $2, lastname = $3, updated_at = NOW()
+        SET firstname = $2, lastname = $3, profile_icon = $4, updated_at = NOW()
         WHERE id = $1
     `
-	_, err := api.Deps.DB.Pool().Exec(ctx, stmt, user.ID, user.FirstName, user.LastName)
+	_, err := api.Deps.DB.Pool().Exec(ctx, stmt, user.ID, user.FirstName, user.LastName, user.ProfileIcon)
 	if err != nil {
 		return err
 	}

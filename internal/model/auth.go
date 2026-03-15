@@ -33,6 +33,7 @@ type LoginUserResponse struct {
 	LastName          *string   `json:"lastname,omitempty"`
 	Username          *string   `json:"username,omitempty"`
 	Email             string    `json:"email"`
+	ProfileIcon       *string   `json:"profile_icon,omitempty"`
 	IsVerified        bool      `json:"is_verified"`
 	PreferredLanguage *string   `json:"preferred_language,omitempty"`
 }

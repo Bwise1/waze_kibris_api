@@ -26,6 +26,7 @@ type User struct {
 	LastName          *string   `json:"lastname,omitempty"`
 	Username          *string   `json:"username,omitempty"`
 	Email             string    `json:"email"`
+	ProfileIcon       *string   `json:"profile_icon,omitempty"` // URL or asset filename (e.g. buddy_buggy.png)
 	IsDeleted         bool      `json:"is_deleted,omitempty"`
 	AuthProvider      string    `json:"auth_provider,omitempty"`
 	IsVerified        bool      `json:"is_verified"`
