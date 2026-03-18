@@ -146,22 +146,67 @@ func (api *API) UpdateCommunityGroup(ctx context.Context, group model.CommunityG
 	return err
 }
 
-func (api *API) SearchCommunityGroup(ctx context.Context, currentUserID *uuid.UUID) ([]model.CommunityGroup, error) {
-	query := `
+func (api *API) SearchCommunityGroup(
+	ctx context.Context,
+	currentUserID *uuid.UUID,
+	lat float64,
+	lng float64,
+	radius float64,
+	filterType string,
+) ([]model.CommunityGroup, error) {
+	userID := uuid.Nil
+	if currentUserID != nil {
+		userID = *currentUserID
+	}
+
+	whereClause := `cg.is_deleted = FALSE`
+	orderByClause := `cg.last_message_at DESC NULLS LAST, cg.created_at DESC`
+
+	args := []interface{}{userID}
+	// 2-based because $1 is reserved for userID
+	nextArgIndex := 2
+
+	switch filterType {
+	case "near_me":
+		// Only apply spatial filter when lat/lng are provided and radius is sensible.
+		if lat != 0 && lng != 0 && radius > 0 {
+			whereClause += fmt.Sprintf(
+				` AND cg.destination_location IS NOT NULL AND ST_DWithin(`+
+					`cg.destination_location::geography, `+
+					`ST_SetSRID(ST_MakePoint($%d, $%d), 4326)::geography, `+
+					`$%d)`,
+				nextArgIndex, nextArgIndex+1, nextArgIndex+2,
+			)
+			args = append(args, lng, lat, radius)
+			nextArgIndex += 3
+		}
+	case "popular":
+		orderByClause = `member_count DESC, cg.last_message_at DESC NULLS LAST, cg.created_at DESC`
+	case "my_routes":
+		// If not logged in, fall back to default ordering without filtering.
+		if userID != uuid.Nil {
+			whereClause += fmt.Sprintf(
+				` AND (` +
+					`cg.creator_id = $1 OR ` +
+					`EXISTS(SELECT 1 FROM group_memberships gm WHERE gm.group_id = cg.id AND gm.user_id = $1)` +
+					`)`,
+			)
+		}
+	default:
+		// default behaviour
+	}
+
+	query := fmt.Sprintf(`
         SELECT cg.id, cg.name, cg.description, cg.group_type, cg.destination_place_id, cg.destination_name,
                ST_AsText(cg.destination_location), cg.visibility, cg.creator_id, cg.icon_url,
                (SELECT COUNT(*)::int FROM group_memberships gm WHERE gm.group_id = cg.id) AS member_count,
                EXISTS(SELECT 1 FROM group_memberships gm2 WHERE gm2.group_id = cg.id AND gm2.user_id = $1) AS is_member,
                cg.last_message_at, cg.is_deleted, cg.created_at, cg.updated_at, cg.short_code
         FROM community_groups cg
-        WHERE cg.is_deleted = FALSE
-        ORDER BY cg.last_message_at DESC NULLS LAST, cg.created_at DESC
-    `
-	userID := uuid.Nil
-	if currentUserID != nil {
-		userID = *currentUserID
-	}
-	rows, err := api.Deps.DB.Pool().Query(ctx, query, userID)
+        WHERE %s
+        ORDER BY %s
+    `, whereClause, orderByClause)
+	rows, err := api.Deps.DB.Pool().Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("querying community groups: %w", err)
 	}

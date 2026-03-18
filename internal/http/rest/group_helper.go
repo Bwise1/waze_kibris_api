@@ -30,9 +30,16 @@ func (api *API) CreateGroupHelper(ctx context.Context, newGroup model.CommunityG
 	return model.CommunityGroup{}, values.Error, "Could not generate unique group code", nil
 }
 
-func (api *API) SearchCommunityGroupsHelper(ctx context.Context, currentUserID *uuid.UUID) ([]model.CommunityGroup, string, string, error) {
+func (api *API) SearchCommunityGroupsHelper(
+	ctx context.Context,
+	currentUserID *uuid.UUID,
+	lat float64,
+	lng float64,
+	radius float64,
+	filterType string,
+) ([]model.CommunityGroup, string, string, error) {
 
-	groups, err := api.SearchCommunityGroup(ctx, currentUserID)
+	groups, err := api.SearchCommunityGroup(ctx, currentUserID, lat, lng, radius, filterType)
 	if err != nil {
 		return []model.CommunityGroup{}, values.Error, "Failed to get groups", err
 	}

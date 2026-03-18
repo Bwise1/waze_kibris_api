@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/bwise1/waze_kibris/internal/model"
 	"github.com/bwise1/waze_kibris/util"
@@ -188,9 +189,9 @@ func (api *API) SendGroupMessageHandler(w http.ResponseWriter, r *http.Request) 
 	// Broadcast the message via WebSockets (wrapper so client gets type + content)
 	msgJSON, _ := json.Marshal(savedMsg)
 	wrapper := map[string]interface{}{
-		"type":    "group_chat",
-		"content": string(msgJSON),
-		"user_id": savedMsg.UserID.String(),
+		"type":     "group_chat",
+		"content":  string(msgJSON),
+		"user_id":  savedMsg.UserID.String(),
 		"group_id": groupID.String(),
 	}
 	wrappedPayload, _ := json.Marshal(wrapper)
@@ -237,7 +238,36 @@ func (api *API) SearchForListOfGroupsHandler(_ http.ResponseWriter, r *http.Requ
 	if userID != uuid.Nil {
 		userIDPtr = &userID
 	}
-	groups, status, message, err := api.SearchCommunityGroupsHelper(r.Context(), userIDPtr)
+	// Parse optional filter params
+	q := r.URL.Query()
+	filterType := q.Get("filter_type") // near_me | my_routes | popular | ""
+	latStr := q.Get("lat")
+	lngStr := q.Get("lng")
+	radiusStr := q.Get("radius")
+
+	var lat, lng, radius float64
+	var err error
+	if latStr != "" {
+		if lat, err = strconv.ParseFloat(latStr, 64); err != nil {
+			lat = 0
+		}
+	}
+	if lngStr != "" {
+		if lng, err = strconv.ParseFloat(lngStr, 64); err != nil {
+			lng = 0
+		}
+	}
+	if radiusStr != "" {
+		if radius, err = strconv.ParseFloat(radiusStr, 64); err != nil {
+			radius = 0
+		}
+	}
+	// Default radius for Near Me when requested and not provided
+	if filterType == "near_me" && radius <= 0 {
+		radius = 50000 // 50km
+	}
+
+	groups, status, message, err := api.SearchCommunityGroupsHelper(r.Context(), userIDPtr, lat, lng, radius, filterType)
 	if err != nil {
 		return respondWithError(err, "unable to get groups", values.Failed, &tc)
 	}
