@@ -20,6 +20,8 @@ type CommunityGroup struct {
 	IconURL             *string    `json:"icon_url,omitempty"`
 	MemberCount         int        `json:"member_count"`
 	IsMember            bool       `json:"is_member"` // true if the current user is in this group
+	UnreadCount         int        `json:"unread_count"`
+	LastReadAt          *time.Time `json:"last_read_at,omitempty"`
 	LastMessageAt       *time.Time `json:"last_message_at,omitempty"`
 	IsDeleted           bool       `json:"is_deleted"`
 	DeletedAt           *time.Time `json:"deleted_at,omitempty"`

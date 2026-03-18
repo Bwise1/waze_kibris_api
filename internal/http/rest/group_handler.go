@@ -91,7 +91,7 @@ func (api *API) GroupRoutes() chi.Router {
 		// (Optional) Mark messages as read - Requires Member role
 		// Request Body: { "last_read_message_id": "..." } or { "last_read_timestamp": "..." }
 		// Response: Success/Failure message
-		r.Method(http.MethodPost, "/{groupID}/read", Handler(api.placeHolderHandler))
+		r.Method(http.MethodPost, "/{groupID}/read", Handler(api.MarkGroupReadHandler))
 
 	})
 
@@ -151,6 +151,38 @@ func (api *API) LeaveGroupHandler(w http.ResponseWriter, r *http.Request) *Serve
 
 	return &ServerResponse{
 		Message:    "Successfully left the group",
+		Status:     values.Success,
+		StatusCode: util.StatusCode(values.Success),
+	}
+}
+
+func (api *API) MarkGroupReadHandler(_ http.ResponseWriter, r *http.Request) *ServerResponse {
+	tc := r.Context().Value(values.ContextTracingKey).(tracing.Context)
+	groupIDStr := chi.URLParam(r, "groupID")
+	groupID, err := uuid.Parse(groupIDStr)
+	if err != nil {
+		return respondWithError(err, "invalid group ID format", values.BadRequestBody, &tc)
+	}
+
+	userID, err := util.GetUserIDFromContext(r.Context())
+	if err != nil {
+		return respondWithError(err, "unable to get user ID from context", values.NotAuthorised, &tc)
+	}
+
+	ok, err := api.IsUserMemberOfGroup(r.Context(), groupID, userID)
+	if err != nil {
+		return respondWithError(err, "failed to check membership", values.Failed, &tc)
+	}
+	if !ok {
+		return respondWithError(nil, "you must be a member to mark group as read", values.NotAllowed, &tc)
+	}
+
+	if err := api.MarkCommunityGroupRead(r.Context(), groupID, userID); err != nil {
+		return respondWithError(err, "failed to mark group as read", values.Failed, &tc)
+	}
+
+	return &ServerResponse{
+		Message:    "Group marked as read",
 		Status:     values.Success,
 		StatusCode: util.StatusCode(values.Success),
 	}

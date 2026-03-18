@@ -104,6 +104,8 @@ func (api *API) GetCommunityGroupByID(ctx context.Context, groupID uuid.UUID) (m
                ST_AsText(cg.destination_location), cg.visibility, cg.creator_id, cg.icon_url,
                (SELECT COUNT(*)::int FROM group_memberships gm WHERE gm.group_id = cg.id) AS member_count,
                false AS is_member,
+               0 AS unread_count,
+               NULL::timestamptz AS last_read_at,
                cg.last_message_at, cg.is_deleted, cg.created_at, cg.updated_at, cg.short_code
         FROM community_groups cg
         WHERE cg.id = $1 AND cg.is_deleted = FALSE
@@ -113,8 +115,8 @@ func (api *API) GetCommunityGroupByID(ctx context.Context, groupID uuid.UUID) (m
 	err := api.Deps.DB.Pool().QueryRow(ctx, query, groupID).Scan(
 		&group.ID, &group.Name, &group.Description, &group.GroupType, &group.DestinationPlaceID,
 		&group.DestinationName, &group.DestinationLocation, &group.Visibility, &group.CreatorID,
-		&group.IconURL, &group.MemberCount, &group.IsMember, &group.LastMessageAt, &group.IsDeleted,
-		&group.CreatedAt, &group.UpdatedAt, &group.ShortCode,
+		&group.IconURL, &group.MemberCount, &group.IsMember, &group.UnreadCount, &group.LastReadAt,
+		&group.LastMessageAt, &group.IsDeleted, &group.CreatedAt, &group.UpdatedAt, &group.ShortCode,
 	)
 
 	return group, err
@@ -201,6 +203,20 @@ func (api *API) SearchCommunityGroup(
                ST_AsText(cg.destination_location), cg.visibility, cg.creator_id, cg.icon_url,
                (SELECT COUNT(*)::int FROM group_memberships gm WHERE gm.group_id = cg.id) AS member_count,
                EXISTS(SELECT 1 FROM group_memberships gm2 WHERE gm2.group_id = cg.id AND gm2.user_id = $1) AS is_member,
+               CASE
+                 WHEN $1 = '00000000-0000-0000-0000-000000000000'::uuid THEN 0
+                 ELSE (
+                   SELECT COUNT(*)::int
+                   FROM messages m
+                   WHERE m.group_id = cg.id
+                     AND m.is_deleted = FALSE
+                     AND m.created_at > COALESCE(
+                       (SELECT gm3.last_read_at FROM group_memberships gm3 WHERE gm3.group_id = cg.id AND gm3.user_id = $1),
+                       '1970-01-01'::timestamptz
+                     )
+                 )
+               END AS unread_count,
+               (SELECT gm4.last_read_at FROM group_memberships gm4 WHERE gm4.group_id = cg.id AND gm4.user_id = $1) AS last_read_at,
                cg.last_message_at, cg.is_deleted, cg.created_at, cg.updated_at, cg.short_code
         FROM community_groups cg
         WHERE %s
@@ -218,8 +234,8 @@ func (api *API) SearchCommunityGroup(
 		err := rows.Scan(
 			&group.ID, &group.Name, &group.Description, &group.GroupType, &group.DestinationPlaceID,
 			&group.DestinationName, &group.DestinationLocation, &group.Visibility, &group.CreatorID,
-			&group.IconURL, &group.MemberCount, &group.IsMember, &group.LastMessageAt, &group.IsDeleted,
-			&group.CreatedAt, &group.UpdatedAt, &group.ShortCode,
+			&group.IconURL, &group.MemberCount, &group.IsMember, &group.UnreadCount, &group.LastReadAt,
+			&group.LastMessageAt, &group.IsDeleted, &group.CreatedAt, &group.UpdatedAt, &group.ShortCode,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("scanning groups: %w", err)
@@ -235,6 +251,8 @@ func (api *API) GetCommunityGroupByShortCode(ctx context.Context, shortCode stri
                ST_AsText(cg.destination_location), cg.visibility, cg.creator_id, cg.icon_url,
                (SELECT COUNT(*)::int FROM group_memberships gm WHERE gm.group_id = cg.id) AS member_count,
                false AS is_member,
+               0 AS unread_count,
+               NULL::timestamptz AS last_read_at,
                cg.last_message_at, cg.is_deleted, cg.created_at, cg.updated_at, cg.short_code
         FROM community_groups cg
         WHERE cg.short_code = $1 AND cg.is_deleted = FALSE
@@ -243,8 +261,8 @@ func (api *API) GetCommunityGroupByShortCode(ctx context.Context, shortCode stri
 	err := api.Deps.DB.Pool().QueryRow(ctx, query, shortCode).Scan(
 		&group.ID, &group.Name, &group.Description, &group.GroupType, &group.DestinationPlaceID,
 		&group.DestinationName, &group.DestinationLocation, &group.Visibility, &group.CreatorID,
-		&group.IconURL, &group.MemberCount, &group.IsMember, &group.LastMessageAt, &group.IsDeleted,
-		&group.CreatedAt, &group.UpdatedAt, &group.ShortCode,
+		&group.IconURL, &group.MemberCount, &group.IsMember, &group.UnreadCount, &group.LastReadAt,
+		&group.LastMessageAt, &group.IsDeleted, &group.CreatedAt, &group.UpdatedAt, &group.ShortCode,
 	)
 	return group, err
 }
@@ -292,6 +310,15 @@ func (api *API) LeaveCommunityGroup(ctx context.Context, groupID uuid.UUID, user
         WHERE group_id = $1 AND user_id = $2
     `
 	_, err := api.Deps.DB.Pool().Exec(ctx, query, groupID, userID)
+	return err
+}
+
+func (api *API) MarkCommunityGroupRead(ctx context.Context, groupID uuid.UUID, userID uuid.UUID) error {
+	_, err := api.Deps.DB.Pool().Exec(ctx, `
+        UPDATE group_memberships
+        SET last_read_at = NOW(), updated_at = NOW()
+        WHERE group_id = $1 AND user_id = $2
+    `, groupID, userID)
 	return err
 }
 
