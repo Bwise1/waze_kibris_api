@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"os/signal"
@@ -10,6 +11,7 @@ import (
 	"github.com/bwise1/waze_kibris/config"
 	"github.com/bwise1/waze_kibris/internal/db"
 	deps "github.com/bwise1/waze_kibris/internal/debs"
+	"github.com/bwise1/waze_kibris/internal/firebaseapp"
 	googlemaps "github.com/bwise1/waze_kibris/internal/http/google"
 	"github.com/bwise1/waze_kibris/internal/http/mapbox"
 	api "github.com/bwise1/waze_kibris/internal/http/rest"
@@ -42,7 +44,17 @@ func main() {
 	googleMapsClient := googlemaps.NewGoogleMapsClient(cfg.GoogleMapsAPIKey)
 	mapboxClient := mapbox.NewMapboxClient(cfg.MapboxAPIKey)
 	log.Printf("Mapbox client initialized")
-	
+
+	fbAuth, err := firebaseapp.NewAuthClient(context.Background(), cfg.FirebaseCredentialsPath)
+	if err != nil {
+		log.Panicln("failed to init Firebase Auth client", err)
+	}
+	if fbAuth != nil {
+		log.Println("Firebase Auth client initialized (ID token verification enabled)")
+	} else {
+		log.Println("Firebase Auth client not configured (set FIREBASE_CREDENTIALS_PATH or GOOGLE_APPLICATION_CREDENTIALS)")
+	}
+
 	a := &api.API{
 		Config:           cfg,
 		Deps:             deps,
@@ -52,6 +64,7 @@ func main() {
 		StadiaClient:     stadiaClient,
 		GoogleMapsClient: googleMapsClient,
 		MapboxClient:     mapboxClient,
+		FirebaseAuth:     fbAuth,
 	}
 	a.Init()
 	go deps.WebSocket.Run()

@@ -9,6 +9,9 @@
 *.dylib
 *.env
 
+# Firebase service account keys (never commit)
+*firebase-adminsdk*.json
+
 # Test binary, built with `go test -c`
 *.test
 

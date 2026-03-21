@@ -210,6 +210,7 @@ func (api *API) SearchCommunityGroup(
                    FROM messages m
                    WHERE m.group_id = cg.id
                      AND m.is_deleted = FALSE
+                     AND m.sender_id IS DISTINCT FROM $1
                      AND m.created_at > COALESCE(
                        (SELECT gm3.last_read_at FROM group_memberships gm3 WHERE gm3.group_id = cg.id AND gm3.user_id = $1),
                        '1970-01-01'::timestamptz

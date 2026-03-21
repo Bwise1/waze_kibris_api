@@ -30,6 +30,8 @@ type Config struct {
 	StadiaMapsAPIKey    string `env:"STADIA_MAPS_API_KEY"`
 	GoogleMapsAPIKey    string `env:"GOOGLE_MAPS_API_KEY"`
 	MapboxAPIKey        string `env:"MAPBOX_API_KEY"`
+	// Path to Firebase service account JSON (server-side only). If empty, GOOGLE_APPLICATION_CREDENTIALS is used.
+	FirebaseCredentialsPath string `env:"FIREBASE_CREDENTIALS_PATH"`
 }
 
 func New() *Config {

@@ -491,6 +491,116 @@ func (api *API) GoogleLogin(idToken string) (model.LoginResponse, string, string
 	}
 }
 
+func firebaseEmailAndNames(claims map[string]interface{}) (email, firstName, lastName string) {
+	if claims == nil {
+		return "", "", ""
+	}
+	if e, ok := claims["email"].(string); ok {
+		email = strings.TrimSpace(e)
+	}
+	if g, ok := claims["given_name"].(string); ok {
+		firstName = strings.TrimSpace(g)
+	}
+	if f, ok := claims["family_name"].(string); ok {
+		lastName = strings.TrimSpace(f)
+	}
+	if firstName == "" && lastName == "" {
+		if n, ok := claims["name"].(string); ok && strings.TrimSpace(n) != "" {
+			parts := strings.Fields(strings.TrimSpace(n))
+			if len(parts) > 0 {
+				firstName = parts[0]
+			}
+			if len(parts) > 1 {
+				lastName = strings.Join(parts[1:], " ")
+			}
+		}
+	}
+	return email, firstName, lastName
+}
+
+// FirebaseLogin verifies a Firebase ID token, resolves or creates the user, links user_auth_providers (auth_provider=firebase), and issues app JWTs.
+func (api *API) FirebaseLogin(idToken string) (model.LoginResponse, string, string, error) {
+	ctx := context.TODO()
+
+	if api.FirebaseAuth == nil {
+		return model.LoginResponse{}, values.Error, "Firebase authentication is not configured on this server", errors.New("firebase auth not configured")
+	}
+
+	token, err := api.FirebaseAuth.VerifyIDToken(ctx, idToken)
+	if err != nil {
+		return model.LoginResponse{}, values.NotAuthorised, "Invalid Firebase ID token", err
+	}
+
+	uid := token.UID
+	email, fn, ln := firebaseEmailAndNames(token.Claims)
+	if email == "" {
+		return model.LoginResponse{}, values.NotAuthorised, "Firebase token has no email claim", nil
+	}
+
+	authRecord, err := api.GetUserAuthProviderByProviderID(ctx, "firebase", uid)
+	if err == nil {
+		user, err := api.GetUserByID(ctx, authRecord.UserID.String())
+		if err != nil {
+			return model.LoginResponse{}, values.Error, "Failed to retrieve user", err
+		}
+		if user.Email != email {
+			return model.LoginResponse{}, values.Conflict, "Firebase account is linked to a different email", nil
+		}
+		return api.generateAndStoreTokens(user)
+	}
+	if !errors.Is(err, pgx.ErrNoRows) && err.Error() != "no rows in result set" {
+		return model.LoginResponse{}, values.Error, "Database error checking Firebase linkage", err
+	}
+
+	user, err := api.GetUserByEmail(ctx, email)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) || errors.Is(err, sql.ErrNoRows) || err.Error() == "no rows in result set" {
+			fbIcon := defaultProfileIcons[rand.Intn(len(defaultProfileIcons))]
+			newUser := model.User{
+				ID:           util.GenerateUUID(),
+				Email:        email,
+				AuthProvider: "firebase",
+				IsVerified:   true,
+				ProfileIcon:  &fbIcon,
+			}
+			if fn != "" {
+				newUser.FirstName = &fn
+			}
+			if ln != "" {
+				newUser.LastName = &ln
+			}
+			newFbUser, err := api.CreateGoogleUserRepo(ctx, newUser)
+			if err != nil {
+				return model.LoginResponse{}, values.Error, "Failed to create new user", err
+			}
+			link := model.UserAuthProvider{
+				UserID:         newFbUser.ID,
+				AuthProvider:   "firebase",
+				AuthProviderID: uid,
+			}
+			if _, err = api.InsertUserAuthProvider(ctx, link); err != nil {
+				return model.LoginResponse{}, values.Error, "Failed to link Firebase account", err
+			}
+			return api.generateAndStoreTokens(newFbUser)
+		}
+		return model.LoginResponse{}, values.Error, "Database error", err
+	}
+
+	link := model.UserAuthProvider{
+		UserID:         user.ID,
+		AuthProvider:   "firebase",
+		AuthProviderID: uid,
+	}
+	if _, err = api.InsertUserAuthProvider(ctx, link); err != nil {
+		if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "23505" {
+			return model.LoginResponse{}, values.Conflict, "Firebase account is already linked to another user", err
+		}
+		return model.LoginResponse{}, values.Error, "Failed to link Firebase account", err
+	}
+
+	return api.generateAndStoreTokens(user)
+}
+
 func (api *API) RefreshAccessToken(ctx context.Context, refreshToken string) (string, string, error) {
 	// Validate the refresh token
 	claims, err := api.verifyToken(refreshToken, true)

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/bwise1/waze_kibris/internal/model"
 	"github.com/bwise1/waze_kibris/util"
@@ -45,6 +46,7 @@ func (api *API) AuthRoutes() chi.Router {
 	mux.Method(http.MethodPost, "/google/create", Handler(api.CreateAccountWithGoogle))
 	mux.Method(http.MethodPost, "/refresh", Handler(api.RefreshTokenHandler)) // Add this line
 	mux.Method(http.MethodPost, "/google/login", Handler(api.MobileGoogleLogin))
+	mux.Method(http.MethodPost, "/firebase/login", Handler(api.MobileFirebaseLogin))
 	return mux
 }
 
@@ -163,12 +165,49 @@ func (api *API) MobileGoogleLogin(_ http.ResponseWriter, r *http.Request) *Serve
 
 	var req struct {
 		IDToken string `json:"id_token"`
+		Token   string `json:"token"`
 	}
 	if decodeErr := util.DecodeJSONBody(&tc, r.Body, &req); decodeErr != nil {
 		return respondWithError(decodeErr, "unable to decode request", values.BadRequestBody, &tc)
 	}
 
-	user, status, message, err := api.GoogleLogin(req.IDToken)
+	idToken := strings.TrimSpace(req.IDToken)
+	if idToken == "" {
+		idToken = strings.TrimSpace(req.Token)
+	}
+	if idToken == "" {
+		return respondWithError(nil, "id_token is required", values.BadRequestBody, &tc)
+	}
+
+	user, status, message, err := api.GoogleLogin(idToken)
+	if err != nil {
+		return respondWithError(err, message, status, &tc)
+	}
+
+	return &ServerResponse{
+		Message:    message,
+		Status:     status,
+		StatusCode: util.StatusCode(status),
+		Data:       user,
+	}
+}
+
+func (api *API) MobileFirebaseLogin(_ http.ResponseWriter, r *http.Request) *ServerResponse {
+	tc := r.Context().Value(values.ContextTracingKey).(tracing.Context)
+
+	var req struct {
+		IDToken string `json:"id_token"`
+	}
+	if decodeErr := util.DecodeJSONBody(&tc, r.Body, &req); decodeErr != nil {
+		return respondWithError(decodeErr, "unable to decode request", values.BadRequestBody, &tc)
+	}
+
+	idToken := strings.TrimSpace(req.IDToken)
+	if idToken == "" {
+		return respondWithError(nil, "id_token is required", values.BadRequestBody, &tc)
+	}
+
+	user, status, message, err := api.FirebaseLogin(idToken)
 	if err != nil {
 		return respondWithError(err, message, status, &tc)
 	}
