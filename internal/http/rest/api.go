@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"firebase.google.com/go/v4/auth"
+	"firebase.google.com/go/v4/messaging"
 
 	"github.com/bwise1/waze_kibris/config"
 	deps "github.com/bwise1/waze_kibris/internal/debs"
@@ -50,7 +51,8 @@ type API struct {
 	StadiaClient     *stadiamaps.Client
 	GoogleMapsClient *googlemaps.GoogleMapsClient
 	MapboxClient     *mapbox.MapboxClient
-	FirebaseAuth     *auth.Client
+	FirebaseAuth      *auth.Client
+	FirebaseMessaging *messaging.Client
 }
 
 func (api *API) Serve() error {

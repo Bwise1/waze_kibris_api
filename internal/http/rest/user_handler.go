@@ -22,6 +22,8 @@ func (api *API) UserRoutes() chi.Router {
 		r.Method(http.MethodPut, "/language", Handler(api.UpdateLanguage))
 		r.Method(http.MethodDelete, "/account", Handler(api.DeleteAccount))
 		r.Method(http.MethodGet, "/nearby-users", Handler(api.GetNearbyUsersHandler))
+		r.Method(http.MethodPost, "/fcm-token", Handler(api.RegisterFCMToken))
+		r.Method(http.MethodDelete, "/fcm-token", Handler(api.UnregisterFCMToken))
 	})
 
 	return mux

@@ -7,9 +7,15 @@
 *.dll
 *.so
 *.dylib
+
+# Local env (secrets)
+.env
+.env.local
+.env.*.local
 *.env
 
 # Firebase service account keys (never commit)
+**/*firebase-adminsdk*.json
 *firebase-adminsdk*.json
 
 # Test binary, built with `go test -c`

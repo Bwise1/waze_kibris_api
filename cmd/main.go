@@ -45,26 +45,32 @@ func main() {
 	mapboxClient := mapbox.NewMapboxClient(cfg.MapboxAPIKey)
 	log.Printf("Mapbox client initialized")
 
-	fbAuth, err := firebaseapp.NewAuthClient(context.Background(), cfg.FirebaseCredentialsPath)
+	fbAuth, fbMessaging, err := firebaseapp.InitAuthAndMessaging(context.Background(), cfg.FirebaseCredentialsPath)
 	if err != nil {
-		log.Panicln("failed to init Firebase Auth client", err)
+		log.Panicln("failed to init Firebase", err)
 	}
 	if fbAuth != nil {
 		log.Println("Firebase Auth client initialized (ID token verification enabled)")
+		if fbMessaging != nil {
+			log.Println("Firebase Cloud Messaging client initialized (push send enabled)")
+		} else {
+			log.Println("Firebase Messaging unavailable (FCM send disabled)")
+		}
 	} else {
-		log.Println("Firebase Auth client not configured (set FIREBASE_CREDENTIALS_PATH or GOOGLE_APPLICATION_CREDENTIALS)")
+		log.Println("Firebase not configured (set FIREBASE_CREDENTIALS_PATH or GOOGLE_APPLICATION_CREDENTIALS)")
 	}
 
 	a := &api.API{
-		Config:           cfg,
-		Deps:             deps,
-		Mailer:           mailer,
-		DB:               database.Pool(),
-		ValhallaClient:   valhallaClient,
-		StadiaClient:     stadiaClient,
-		GoogleMapsClient: googleMapsClient,
-		MapboxClient:     mapboxClient,
-		FirebaseAuth:     fbAuth,
+		Config:             cfg,
+		Deps:               deps,
+		Mailer:             mailer,
+		DB:                 database.Pool(),
+		ValhallaClient:     valhallaClient,
+		StadiaClient:       stadiaClient,
+		GoogleMapsClient:   googleMapsClient,
+		MapboxClient:       mapboxClient,
+		FirebaseAuth:       fbAuth,
+		FirebaseMessaging:  fbMessaging,
 	}
 	a.Init()
 	go deps.WebSocket.Run()
